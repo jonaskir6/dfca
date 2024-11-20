@@ -92,7 +92,7 @@ class TrainMNISTCluster(object):
 
     def setup_datasets(self):
 
-        # np.random.seed(self.config['data_seed'])
+        np.random.seed(self.config['data_seed'])
 
         # generate indices for each dataset
         # also write cluster info
@@ -100,27 +100,45 @@ class TrainMNISTCluster(object):
         MNIST_TRAINSET_DATA_SIZE = 15000
         MNIST_TESTSET_DATA_SIZE = 2500
 
-        # np.random.seed(self.config['data_seed'])
+        np.random.seed(self.config['data_seed'])
 
         cfg = self.config
 
         self.dataset = {}
 
-        dataset = {}
-        dataset['data_indices'], dataset['cluster_assign'] = \
-            self._setup_dataset(MNIST_TRAINSET_DATA_SIZE, cfg['p'], cfg['m'], cfg['n'])
-        (X, y) = self._load_MNIST(train=True)
-        dataset['X'] = X
-        dataset['y'] = y
-        self.dataset['train'] = dataset
+        if cfg['uneven'] == True:
+            dataset = {}
+            dataset['data_indices'], dataset['cluster_assign'] = \
+                self._setup_dataset_random_n(MNIST_TRAINSET_DATA_SIZE, cfg['p'], cfg['m'], cfg['n'])
+            (X, y) = self._load_MNIST(train=True)
+            dataset['X'] = X
+            dataset['y'] = y
+            self.dataset['train'] = dataset
 
-        dataset = {}
-        dataset['data_indices'], dataset['cluster_assign'] = \
-            self._setup_dataset(MNIST_TESTSET_DATA_SIZE, cfg['p'], cfg['m_test'], cfg['n'], random=False)
-        (X, y) = self._load_MNIST(train=False)
-        dataset['X'] = X
-        dataset['y'] = y
-        self.dataset['test'] = dataset
+            dataset = {}
+            dataset['data_indices'], dataset['cluster_assign'] = \
+                self._setup_dataset_random_n(MNIST_TESTSET_DATA_SIZE, cfg['p'], cfg['m_test'], cfg['n'], random=True)
+            (X, y) = self._load_MNIST(train=False)
+            dataset['X'] = X
+            dataset['y'] = y
+            self.dataset['test'] = dataset
+
+        else:
+            dataset = {}
+            dataset['data_indices'], dataset['cluster_assign'] = \
+                self._setup_dataset(MNIST_TRAINSET_DATA_SIZE, cfg['p'], cfg['m'], cfg['n'])
+            (X, y) = self._load_MNIST(train=True)
+            dataset['X'] = X
+            dataset['y'] = y
+            self.dataset['train'] = dataset
+
+            dataset = {}
+            dataset['data_indices'], dataset['cluster_assign'] = \
+                self._setup_dataset(MNIST_TESTSET_DATA_SIZE, cfg['p'], cfg['m_test'], cfg['n'], random=True)
+            (X, y) = self._load_MNIST(train=False)
+            dataset['X'] = X
+            dataset['y'] = y
+            self.dataset['test'] = dataset
 
         # import ipdb; ipdb.set_trace()
 
@@ -131,6 +149,10 @@ class TrainMNISTCluster(object):
 
     def _setup_dataset(self, num_data, p, m, n, random = True):
 
+        print("m:",m)
+        print("p:",p)
+        print("n:",n)
+        print("num_data:",num_data)
         assert (m // p) * n == num_data
 
         dataset = {}
@@ -154,7 +176,41 @@ class TrainMNISTCluster(object):
 
             cluster_assign += [p_i for _ in range(m_per_cluster)]
 
+        print(type(data_indices))
         data_indices = np.array(data_indices)
+        cluster_assign = np.array(cluster_assign)
+        assert data_indices.shape[0] == cluster_assign.shape[0]
+        assert data_indices.shape[0] == m
+
+
+        return data_indices, cluster_assign
+    
+    def _setup_dataset_random_n(self, num_data, p, m, n, random = True):
+
+        print("m:",m)
+        print("p:",p)
+        print("num_data:",num_data)
+
+        dataset = {}
+
+        cfg = self.config
+
+        data_indices = []
+        cluster_assign = []
+
+        m_per_cluster = m // p
+
+        for p_i in range(p):
+
+            ll = list(np.random.permutation(num_data))
+
+            ll2 = chunkify_uneven(ll, m_per_cluster) # splits ll into m lists with size n
+            data_indices += ll2
+
+            cluster_assign += [p_i for _ in range(m_per_cluster)]
+
+        print(type(data_indices))
+        data_indices = np.array(data_indices, dtype=object)
         cluster_assign = np.array(cluster_assign)
         assert data_indices.shape[0] == cluster_assign.shape[0]
         assert data_indices.shape[0] == m
@@ -361,7 +417,7 @@ class TrainMNISTCluster(object):
         # NEEDS TO BE DECENTRALIZED
         for p_i, models in enumerate(local_models):
             if len(models) > 0:
-                # self.dec_param_update(models, self.models[p_i], 4)
+                # self.dec_param_update(models, self.models[p_i])
                 self.global_param_update(models, self.models[p_i])
         t1 = time.time()
 
@@ -526,12 +582,23 @@ class TrainMNISTCluster(object):
         # import ipdb; ipdb.set_trace()
 
     
-    def dec_param_update(self, local_models, global_model, e):
+    def dec_param_update(self, local_models, global_model):
 
         # average of each weight
         num_clients = len(local_models)
-        client_indices = list(range(num_clients))
 
+        if num_clients == 0:
+            return
+        
+        if num_clients == 1:
+            bc_client = dict(local_models[0].named_parameters())
+            for name, param in global_model.named_parameters():
+                param.data = bc_client[name].data.clone()
+            return 
+
+        e = num_clients - 1
+        client_indices = list(range(num_clients))
+            
         for m_i, local_model in enumerate(local_models):
             selected_clients = random.sample([i for i in client_indices if i != m_i], e)
 

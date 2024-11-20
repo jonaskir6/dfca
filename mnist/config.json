@@ -3,6 +3,7 @@
     "m_test" : 8,
     "p" : 4,
     "n" : 1250,
+    "uneven": true,
 
     "h1": 2048,
 
@@ -12,6 +13,6 @@
     "tau":5,
     "lr":0.1,
 
-    "data_seed":0,
-    "train_seed":0
+    "data_seed":5,
+    "train_seed":5
 }

@@ -182,8 +182,8 @@ class TrainMNISTCluster(object):
 
 
     def setup_models(self):
-        np.random.seed(self.config['train_seed'])
-        torch.manual_seed(self.config['train_seed'])
+        # np.random.seed(self.config['train_seed'])
+        # torch.manual_seed(self.config['train_seed'])
 
         p = self.config['p']
 
