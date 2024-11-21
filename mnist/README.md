@@ -1,6 +1,7 @@
 # Decentralized IFCA - MNIST
 
 Implementation of Decentralized IFCA, experiments with MNIST.
+Experiments work in progress...
 
 ## Requirements
 * Python3
