@@ -1,0 +1,50 @@
+1: How to handle the iterative clustering
+- Choosing Timespan vs Rounds based algorithm (Recluster after time or communication rounds)
+- Ideas:    - 1 Token per Cluster, pass the Token around randomly => Delete Token after period, assign new Token per cluster after cluster update
+            ! - 1 Token per Cluster, compare loss values when exchanging models, if loss of other client lower, pass token => Delete Token after period, assign new Token per cluster after cluster update
+            - Sharing the Loss values with all clients within cluster, choose the one with lowest loss
+
+
+
+- Pseudo algorithm idea: k models "θ", k cluster "C", n clients "m", x rounds "r", y epochs "e", active loss in each client "l"
+    1: Server publishes all k models, as well as a list of all clients m with their contact information to all clients
+    2: For each epoch
+    3:  Clients run local inference on all k models, update l
+    4:  Clients assign themselves to the cluster C_i with the lowest loss value and broadcast client m_i + C_i
+    5:  Each Client: update infromation list with cluster identities
+    6:  For each cluster
+    7:      Server sends a Token to one random client in each cluster
+    8:  in every client i:
+    9:      Initialize cnt = 0  # Track exchanges for this round in client i
+    10:     while cnt < rounds:  # Limit exchanges to 'rounds' per client
+    11:        if request_received() and cnt < rounds:  # If an incoming request is available
+    12:            accept request from requester m_j
+    13:            exchange models and loss (send θ_i, l_i; receive θ_j, l_j)
+    14:            θ_i = average(θ_i, θ_j)
+    15:            cnt += 1
+    16:            if token not null && l_j < l_i:
+    17:               send token
+    18:               if request_received()
+    19:                token = token_j
+    20:        if cnt < rounds:
+    21:            Select random client m_j in C_i  # Pick a peer in the same cluster
+    22:            Send model exchange request to m_j
+    23:            if m_j accepts:
+    24:                exchange models and loss (send θ_i, l_i; receive θ_j, l_j)
+    25:                θ_i = average(θ_i, θ_j)
+    26:                cnt += 1
+    27:                if token not null && l_j < l_i:
+    28:                    send token to m_j
+    29:                if request_received()
+    30:                token = token_j
+
+
+Change to only one part in while loop? Accept and Request before and then just exchange everything
+
+
+config:
+
+m=48
+m_test=8
+p=4
+n=1250

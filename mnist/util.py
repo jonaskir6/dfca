@@ -41,6 +41,7 @@ def chunkify(a, n):
     return list(gen)
 
 def chunkify_uneven(a, n):
+    print("len: ", len(a))
     # splits list into uneven size list of lists
     # e.g [1,2,3,4] -> [1], [2,3,4]
 
@@ -50,6 +51,8 @@ def chunkify_uneven(a, n):
     sizes = sizes / np.sum(sizes) * len(a)
     sizes = sizes.astype(int)
     sizes[-1] = len(a) - np.sum(sizes[:-1])
+
+    sizes = np.maximum(sizes, 1)
 
     # print("sizes: ", sizes)
     gen = []

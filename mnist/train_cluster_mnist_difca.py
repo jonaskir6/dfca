@@ -7,6 +7,8 @@ import pickle
 import copy
 import random
 
+import seaborn as sns
+import matplotlib as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -97,8 +99,8 @@ class TrainMNISTCluster(object):
         # generate indices for each dataset
         # also write cluster info
 
-        MNIST_TRAINSET_DATA_SIZE = 15000
-        MNIST_TESTSET_DATA_SIZE = 2500
+        MNIST_TRAINSET_DATA_SIZE = 60000
+        MNIST_TESTSET_DATA_SIZE = 10000
 
         np.random.seed(self.config['data_seed'])
 
@@ -204,12 +206,11 @@ class TrainMNISTCluster(object):
 
             ll = list(np.random.permutation(num_data))
 
-            ll2 = chunkify_uneven(ll, m_per_cluster) # splits ll into m lists with size n
+            ll2 = chunkify_uneven(ll, m_per_cluster) # splits ll into m lists
             data_indices += ll2
 
             cluster_assign += [p_i for _ in range(m_per_cluster)]
 
-        print(type(data_indices))
         data_indices = np.array(data_indices, dtype=object)
         cluster_assign = np.array(cluster_assign)
         assert data_indices.shape[0] == cluster_assign.shape[0]
@@ -331,6 +332,14 @@ class TrainMNISTCluster(object):
                 self.save_checkpoint()
                 print(f'checkpoint written at {self.checkpoint_fname}')
 
+        plt.figure(figsize=(10,5))
+        plt.plot([r['train']['loss'] for r in results], label='train')
+        plt.xlabel('epoch')
+        plt.ylabel('loss')
+        plt.title('Training Loss per Epoch')
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(os.path.join(self.config['project_dir'], 'train_loss.png'))
         # import ipdb; ipdb.set_trace()
 
     def lr_schedule(self, epoch):
@@ -455,10 +464,14 @@ class TrainMNISTCluster(object):
         corrects = {}
         for m_i in range(m):
             (X, y) = self.load_data(m_i, train=train) # load batch data rotated
+
             for p_i in range(p):
                 y_logit = self.models[p_i](X)
                 loss = self.criterion(y_logit, y) # loss of
                 n_correct = self.n_correct(y_logit, y)
+
+                # if torch.isnan(loss):
+                #     print("nan loss: ", dataset['data_indices'][m_i])
 
                 losses[(m_i,p_i)] = loss.item()
                 corrects[(m_i,p_i)] = n_correct
@@ -483,6 +496,7 @@ class TrainMNISTCluster(object):
             min_correct = corrects[(m_i,p_i)]
             min_corrects.append(min_correct)
 
+        # print("losses: ", min_losses)
         loss = np.mean(min_losses)
         acc = np.sum(min_corrects) / num_data
 
@@ -584,7 +598,6 @@ class TrainMNISTCluster(object):
     
     def dec_param_update(self, local_models, global_model):
 
-        # average of each weight
         num_clients = len(local_models)
 
         if num_clients == 0:
