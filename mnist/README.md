@@ -1,6 +1,7 @@
-# IFCA - MNIST
+# Decentralized IFCA - MNIST
 
-Implementation of IFCA, experiments with MNIST.
+Implementation of Decentralized IFCA, experiments with MNIST.
+Experiments work in progress...
 
 ## Requirements
 * Python3
@@ -13,6 +14,7 @@ Implementation of IFCA, experiments with MNIST.
     "m_test" : 400,        # number of machines (used for splitting the test dataset)
     "p" : 4,               # number of cluster groups (expects m % p == 0 and m_test % p == 0)
     "n" : 100,             # number of images for each ma
+    "uneven": true,        # if true, clients will have random amounts of data
     "h1": 200,             # hidden layer size for the NN 
     "num_epochs": 300,     # number of data
     "batch_size":100,      # batch size of local update
