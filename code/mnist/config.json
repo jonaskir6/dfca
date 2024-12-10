@@ -1,0 +1,18 @@
+{
+    "m" : 1200,
+    "m_test" : 200,
+    "p" : 4,
+    "n" : 100,
+    "uneven": true,
+
+    "h1": 2048,
+
+    "num_epochs": 300,
+
+    "batch_size":100,
+    "tau":10,
+    "lr":0.1,
+
+    "data_seed":5,
+    "train_seed":5
+}
