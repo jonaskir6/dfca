@@ -19,3 +19,6 @@ Machine Learning, Deep Learning, Clustering:
     - Dr. Kevin Murphy: "Probabalistic Machine Learning: Advanced Topics", 2022 Messachusets Institute Of Technology => https://probml.github.io/pml-book/book2.html
     - Jiawei Han, Micheline Kamber, Jian Pei: "Data Mining - Concepts and Techniques, 4th ed.", Morgan Kaufmann Publishers 2023 => literature/bda_nn_slides
     - Aston Zhang, Zachary C. Lipton, Mu Li, Alexander J. Smola: "Dive Deep into Machine Learning",  https://d2l.ai/d2l-en.pdf
+
+Federated Learning:
+    - Communication-Efficient Learning of Deep Networks from Decentralized Data
