@@ -610,6 +610,43 @@ class TrainMNISTCluster(object):
 
         # import ipdb; ipdb.set_trace()
 
+    def weighted_dec_param_update(self, local_models, global_model):
+
+        num_clients = len(local_models)
+
+        if num_clients == 0:
+            return
+        
+        if num_clients == 1:
+            bc_client = dict(local_models[0].named_parameters())
+            for name, param in global_model.named_parameters():
+                param.data = bc_client[name].data.clone()
+            return 
+
+        e = num_clients - 1
+        client_indices = list(range(num_clients))
+            
+        for m_i, local_model in enumerate(local_models):
+            selected_clients = random.sample([i for i in client_indices if i != m_i], e)
+
+            for m_j in selected_clients:
+
+                m_j_params = dict(local_models[m_j].named_parameters())
+
+                for name, param in local_model.named_parameters():
+                    m_i_sample_size = self.dataset['train']['data_indices'][m_i][1] - self.dataset['train']['data_indices'][m_i][0]
+                    m_j_sample_size = self.dataset['train']['data_indices'][m_j][1] - self.dataset['train']['data_indices'][m_j][0]
+                    m_i_weight = m_i_sample_size / (m_i_sample_size + m_j_sample_size)
+                    m_j_weight = m_j_sample_size / (m_i_sample_size + m_j_sample_size)
+                    m_i_param = param.data.clone()
+                    m_j_param = m_j_params[name].data.clone()
+                    param.data = m_i_weight * m_i_param + m_j_weight * m_j_param
+
+        bc_client = random.choice(client_indices)
+        bc_client_params = dict(local_models[bc_client].named_parameters())
+        for name, param in global_model.named_parameters():
+            param.data = bc_client_params[name].data.clone()
+
 
     def test(self, train=False):
         return self.get_inference_stats(train=train)
