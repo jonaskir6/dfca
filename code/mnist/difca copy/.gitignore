@@ -1,0 +1,5 @@
+__pycache__
+data
+outputs
+output/*
+!output/res.py
