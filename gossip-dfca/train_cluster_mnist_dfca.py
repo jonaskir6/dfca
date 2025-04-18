@@ -71,8 +71,9 @@ def get_config():
 
 
 class TrainMNISTCluster(object):
-    def __init__(self, config):
+    def __init__(self, config, device):
         self.config = config
+        self.device = device
 
         assert self.config['m'] % self.config['p'] == 0
 
@@ -88,9 +89,8 @@ class TrainMNISTCluster(object):
 
         self.epoch = None
         self.lr = None
+        #self.cluster_switch = None
 
-
-    # Sets up train and test datasets
 
     def setup_datasets(self):
 
@@ -145,48 +145,6 @@ class TrainMNISTCluster(object):
         # import ipdb; ipdb.set_trace()
 
 
-
-    # Sets up the dataset for each machine and initializes clusters with equal numbers of clients
-    # TODO Do I really need to init clusters?
-
-    def _setup_dataset(self, num_data, p, m, n, random = True):
-
-        print("m:",m)
-        print("p:",p)
-        print("n:",n)
-        print("num_data:",num_data)
-        assert (m // p) * n == num_data
-
-        dataset = {}
-
-        cfg = self.config
-
-        data_indices = []
-        cluster_assign = []
-
-        m_per_cluster = m // p
-
-        for p_i in range(p):
-
-            if random:
-                ll = list(np.random.permutation(num_data))
-            else:
-                ll = list(range(num_data))
-
-            ll2 = chunkify(ll, m_per_cluster) # splits ll into m lists with size n
-            data_indices += ll2
-
-            cluster_assign += [p_i for _ in range(m_per_cluster)]
-
-        print(type(data_indices))
-        data_indices = np.array(data_indices)
-        cluster_assign = np.array(cluster_assign)
-        assert data_indices.shape[0] == cluster_assign.shape[0]
-        assert data_indices.shape[0] == m
-
-
-        return data_indices, cluster_assign
-    
     def _setup_dataset_random_n(self, num_data, p, m, n, random = True):
 
         print("m:",m)
@@ -239,6 +197,8 @@ class TrainMNISTCluster(object):
         # normalize to have 0 ~ 1 range in each pixel
 
         X = X / 255.0
+        X = X.to(self.device)
+        y = y.to(self.device)
 
         return X, y
 
@@ -250,8 +210,9 @@ class TrainMNISTCluster(object):
         torch.manual_seed(self.config['train_seed'])
 
         p = self.config['p']
+        m = self.config['m']
 
-        self.models = [ SimpleLinear(h1 = self.config['h1']) for p_i in range(p)] # p models with p different params of dimension(1,d)
+        self.models = [[SimpleLinear(h1 = self.config['h1']).to(self.device) for p_i in range(p)] for m_i in range(m)] # p models with p different params of dimension(1,d) for each client m_i
 
         self.criterion = torch.nn.CrossEntropyLoss()
 
@@ -261,6 +222,8 @@ class TrainMNISTCluster(object):
     def run(self):
         num_epochs = self.config['num_epochs']
         lr = self.config['lr']
+
+        #self.cluster_switch = [[0 for _ in range(self.config['p'])] for m_i in range(self.config['m'])] 
 
         results = []
 
@@ -329,7 +292,7 @@ class TrainMNISTCluster(object):
                 with open(self.result_fname, 'wb') as outfile:
                     pickle.dump(results, outfile)
                     print(f'result written at {self.result_fname}')
-                self.save_checkpoint()
+#                self.save_checkpoint()
                 print(f'checkpoint written at {self.checkpoint_fname}')
 
         plt.figure(figsize=(10,5))
@@ -342,6 +305,16 @@ class TrainMNISTCluster(object):
         plt.savefig(os.path.join(self.config['project_dir'], 'train_loss.png'))
         # import ipdb; ipdb.set_trace()
 
+        plt.figure(figsize=(10,5))
+        plt.plot([r['test']['acc'] for r in results], label='train')
+        plt.xlabel('epoch')
+        plt.ylabel('test accuracy')
+        plt.title('Test Accuracy per Epoch')
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(os.path.join(self.config['project_dir'], 'test_acc.png'))
+
+
     def lr_schedule(self, epoch):
         if self.lr is None:
             self.lr = self.config['lr']
@@ -349,7 +322,7 @@ class TrainMNISTCluster(object):
         if epoch % 50 == 0 and epoch != 0 and LR_DECAY:
             self.lr = self.lr * 0.1
 
-        return self.lr
+        return self.lr        
 
 
     def print_epoch_stats(self, res):
@@ -384,14 +357,13 @@ class TrainMNISTCluster(object):
         t0 = time.time()
 
 
-        updated_models = []
         for m_i in range(m):
             if VERBOSE and m_i % 100 == 0: print(f'm {m_i}/{m} processing \r', end ='')
 
             (X, y) = self.load_data(m_i)
 
             p_i = cluster_assign[m_i]
-            model = copy.deepcopy(self.models[p_i])
+            model = self.models[m_i][p_i]
 
             # LOCAL UPDATE PER MACHINE tau times
             for step_i in range(tau):
@@ -405,7 +377,6 @@ class TrainMNISTCluster(object):
 
             model.zero_grad()
 
-            updated_models.append(model)
 
         t02 = time.time()
         # print(f'running single ..took {t02-t01:.3f}sec')
@@ -417,16 +388,8 @@ class TrainMNISTCluster(object):
         # apply gradient update
         t0 = time.time()
 
-        # CLUSTER MACHINES INTO p_i's
-        local_models = [[] for p_i in range(p)]
-        for m_i in range(m):
-            p_i = cluster_assign[m_i]
-            local_models[p_i].append(updated_models[m_i])
-
         # NEEDS TO BE DECENTRALIZED
-        for p_i, models in enumerate(local_models):
-            if len(models) > 0:
-                self.dec_param_update(models, self.models[p_i])
+        self.dec_param_update(cluster_assign)
         t1 = time.time()
 
         if VERBOSE: print(f'global update {t1-t0:.3f}sec')
@@ -465,7 +428,7 @@ class TrainMNISTCluster(object):
             (X, y) = self.load_data(m_i, train=train) # load batch data rotated
 
             for p_i in range(p):
-                y_logit = self.models[p_i](X)
+                y_logit = self.models[m_i][p_i](X)
                 loss = self.criterion(y_logit, y) # loss of
                 n_correct = self.n_correct(y_logit, y)
 
@@ -481,6 +444,7 @@ class TrainMNISTCluster(object):
         cluster_assign = []
         for m_i in range(m):
             machine_losses = [ losses[(m_i,p_i)] for p_i in range(p) ]
+            #print("Machine Losses:", machine_losses)
             min_p_i = np.argmin(machine_losses)
             cluster_assign.append(min_p_i)
 
@@ -524,7 +488,7 @@ class TrainMNISTCluster(object):
         correct = (predicted == y).sum().item()
 
         return correct
-    
+
     # TODO Does every Cluster get 4 clients with the same data, but rotated differently?
 
     def load_data(self, m_i, train=True):
@@ -574,78 +538,63 @@ class TrainMNISTCluster(object):
 
         # import ipdb; ipdb.set_trace() # we need to check the output of name, check if duplicate exists
 
-    
-    def dec_param_update(self, local_models, global_model):
 
-        num_clients = len(local_models)
+    def dec_param_update(self, cluster_assign):
 
-        if num_clients == 0:
+        num_clients = self.config['m']
+
+        if num_clients <= 4:
             return
-        
-        if num_clients == 1:
-            bc_client = dict(local_models[0].named_parameters())
-            for name, param in global_model.named_parameters():
-                param.data = bc_client[name].data.clone()
-            return 
 
-        e = num_clients - 1
-        client_indices = list(range(num_clients))
-            
-        for m_i, local_model in enumerate(local_models):
-            selected_clients = random.sample([i for i in client_indices if i != m_i], e)
+        max_e = 100
+        if num_clients <= max_e:
+            e = num_clients - 1
+        else:
+            e = min(max_e, int(np.log(num_clients) * 20))
 
+        if e >= num_clients:
+            e = num_clients - 1
+
+        client_indices = list(range(num_clients)) 
+
+        for m_i in range(num_clients):
+
+            counts = {i: 0 for i in range(self.config['p'])}
+            for value in cluster_assign:
+                counts[value] += 1
+
+            num_cluster_i = counts[cluster_assign[m_i]]
+            num_cluster_rest = num_clients - num_cluster_i
+
+            threshold_j = min(num_cluster_rest, 100)
+            threshold_i = min(num_cluster_i, 100)
+
+            # threshold_j = min(num_cluster_rest, int(np.floor(e/2)))
+            # threshold_i = min(num_cluster_i, int(np.floor(e/2))) - 1
+
+            selected_clients = random.sample([i for i in client_indices if i != m_i], torch.randint(1, min(threshold_i,threshold_j), (1,)))
+            # selected_clients += random.sample([i for i in client_indices if i != m_i and cluster_assign[m_i] == cluster_assign[i]], threshold_i)
+            m_i_cluster = cluster_assign[m_i]
             for m_j in selected_clients:
+                m_j_cluster = cluster_assign[m_j]
 
-                m_j_params = dict(local_models[m_j].named_parameters())
+                m_j_params = dict(self.models[m_j][m_j_cluster].named_parameters())
 
-                for name, param in local_model.named_parameters():
-                    m_i_param = param.data.clone()
-                    m_j_param = m_j_params[name].data.clone()
-                    param.data = (m_i_param + m_j_param) / 2
+                if m_i_cluster == m_j_cluster:
+                    for name, param in self.models[m_i][m_i_cluster].named_parameters():
+                        m_i_param = param.data.clone()
+                        m_j_param = m_j_params[name].data.clone()
+                        alpha = 0.5
+                        param.data = (m_i_param + m_j_param) / 2     
 
-        bc_client = random.choice(client_indices)
-        bc_client_params = dict(local_models[bc_client].named_parameters())
-        for name, param in global_model.named_parameters():
-            param.data = bc_client_params[name].data.clone()
+                else:
+                    for name, param in self.models[m_i][m_j_cluster].named_parameters():
+                        m_i_param = param.data.clone()
+                        m_j_param = m_j_params[name].data.clone()
+                        alpha = 0.7
+                        param.data = alpha * m_i_param + (1 - alpha) * m_j_param
 
         # import ipdb; ipdb.set_trace()
-
-    def weighted_dec_param_update(self, local_models, global_model):
-
-        num_clients = len(local_models)
-
-        if num_clients == 0:
-            return
-        
-        if num_clients == 1:
-            bc_client = dict(local_models[0].named_parameters())
-            for name, param in global_model.named_parameters():
-                param.data = bc_client[name].data.clone()
-            return 
-
-        e = num_clients - 1
-        client_indices = list(range(num_clients))
-            
-        for m_i, local_model in enumerate(local_models):
-            selected_clients = random.sample([i for i in client_indices if i != m_i], e)
-
-            for m_j in selected_clients:
-
-                m_j_params = dict(local_models[m_j].named_parameters())
-
-                for name, param in local_model.named_parameters():
-                    m_i_sample_size = self.dataset['train']['data_indices'][m_i][1] - self.dataset['train']['data_indices'][m_i][0]
-                    m_j_sample_size = self.dataset['train']['data_indices'][m_j][1] - self.dataset['train']['data_indices'][m_j][0]
-                    m_i_weight = m_i_sample_size / (m_i_sample_size + m_j_sample_size)
-                    m_j_weight = m_j_sample_size / (m_i_sample_size + m_j_sample_size)
-                    m_i_param = param.data.clone()
-                    m_j_param = m_j_params[name].data.clone()
-                    param.data = m_i_weight * m_i_param + m_j_weight * m_j_param
-
-        bc_client = random.choice(client_indices)
-        bc_client_params = dict(local_models[bc_client].named_parameters())
-        for name, param in global_model.named_parameters():
-            param.data = bc_client_params[name].data.clone()
 
 
     def test(self, train=False):
