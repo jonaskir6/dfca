@@ -1,8 +1,8 @@
 {
-    "m" : 2400,
-    "m_test" : 400,
+    "m" : 1200,
+    "m_test" : 200,
     "p" : 4,
-    "n" : 100,
+    "n" : 200,
     "uneven": true,
 
     "h1": 200,
@@ -13,8 +13,8 @@
     "tau":10,
     "lr":0.1,
 
-    "data_seed":8,
-    "train_seed":18,
+    "data_seed":10,
+    "train_seed":10,
     "config_override":"",
     "project_dir": "output"
 }
