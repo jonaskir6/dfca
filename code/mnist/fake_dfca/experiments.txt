@@ -1,5 +1,0 @@
-- Notebook mit 10 verschiedenen Training Seeds und jeweiligem saven des losses bei der letzten epoche
-    - Zusammenfassen als "Ergebnis"
-
-- Experimentell: Verschiedene Data Distributions auf den Clients: Vor allem Quantity Skew interessant
-- Alle Experimente mit Difca-MC
