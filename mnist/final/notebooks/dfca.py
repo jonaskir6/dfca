@@ -168,8 +168,14 @@ class TrainMNISTCluster(object):
 
         p = self.config['p']
         m = self.config['m']
+        local_model_init = self.config['local_model_init']
 
-        self.models = [[SimpleLinear(h1 = self.config['h1']).to(self.device) for p_i in range(p)] for m_i in range(m)] # p models with p different params of dimension(1,d) for each client m_i
+        if local_model_init:
+            self.models = [[SimpleLinear(h1 = self.config['h1']).to(self.device) for p_i in range(p)] for m_i in range(m)]
+
+        else:
+            global_models = [SimpleLinear(h1 = self.config['h1']).to(self.device) for p_i in range(p)]  # Create p models
+            self.models = [global_models for m_i in range(m)]  # Each client gets the same list of p models
 
         self.criterion = torch.nn.CrossEntropyLoss()
 
@@ -539,15 +545,6 @@ class TrainMNISTCluster(object):
         if num_clients <= 4:
             return
 
-        max_e = 100
-        if num_clients <= max_e:
-            e = num_clients - 1
-        else:
-            e = min(max_e, int(np.log(num_clients) * 20))
-
-        if e >= num_clients:
-            e = num_clients - 1
-
         client_indices = list(range(num_clients)) 
 
         for m_i in range(num_clients):
@@ -564,6 +561,9 @@ class TrainMNISTCluster(object):
 
             # threshold_j = min(num_cluster_rest, int(np.floor(e/2)))
             # threshold_i = min(num_cluster_i, int(np.floor(e/2))) - 1
+
+            if threshold_i <= 1 or threshold_j <= 1:
+                continue
 
             selected_clients = random.sample([i for i in client_indices if i != m_i], torch.randint(1, min(threshold_i,threshold_j), (1,)))
             # selected_clients += random.sample([i for i in client_indices if i != m_i and cluster_assign[m_i] == cluster_assign[i]], threshold_i)

@@ -17,5 +17,5 @@
     "data_seed":10,
     "train_seed":10,
     "config_override":"",
-    "project_dir": "output_dfca"
+    "project_dir": "output_dfca_gi"
 }
