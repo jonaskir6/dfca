@@ -4,15 +4,15 @@
     "p" : 2,
     "n" : 200,
     "uneven": true,
-    "local_model_init": true,
+    "local_model_init": false,
 
     "h1": 128,
 
-    "num_epochs": 100,
+    "num_epochs": 5,
 
     "batch_size":100,
     "tau":5,
-    "lr":0.05,
+    "lr":0.001,
 
     "data_seed":10,
     "train_seed":10,
