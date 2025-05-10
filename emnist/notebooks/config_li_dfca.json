@@ -1,0 +1,21 @@
+{
+    "m" : 1200,
+    "m_test" : 200,
+    "p" : 2,
+    "n" : 200,
+    "uneven": true,
+    "local_model_init": true,
+
+    "h1": 128,
+
+    "num_epochs": 100,
+
+    "batch_size":100,
+    "tau":5,
+    "lr":0.05,
+
+    "data_seed":10,
+    "train_seed":10,
+    "config_override":"",
+    "project_dir": "output_dfca"
+}
