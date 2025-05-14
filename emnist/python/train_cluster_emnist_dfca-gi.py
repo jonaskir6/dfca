@@ -1,49 +1,71 @@
-import argparse
-import json
 import os
 import time
-import itertools
 import pickle
-import copy
+import argparse
 import random
-import math
+import json
 
-import seaborn as sns
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
 import torchvision
 import torchvision.datasets as datasets
-from torch.utils.data import DataLoader, Dataset, TensorDataset
+from torch.utils.data import DataLoader
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import confusion_matrix
-
 
 import numpy as np
 
 from util import *
 
 
+# LR_DECAY = True
 LR_DECAY = False
 
-class SimpleCNN(nn.Module):
-    def __init__(self):
-        super(SimpleCNN, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, stride=1, padding=1)
-        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1)
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
-        self.fc1 = nn.Linear(64 * 7 * 7, 128)
-        self.fc2 = nn.Linear(128, 47)
+def main():
 
-    def forward(self, x):
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(-1, 64 * 7 * 7)
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return F.log_softmax(x, dim=1)
+    config = get_config()
+
+    config['train_seed'] = config['data_seed']
+
+    print("config:",config)
+
+    exp = TrainEMNISTCluster(config)
+    exp.setup()
+    exp.run()
+
+
+def get_config():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--project-dir",type=str,default="output")
+    parser.add_argument("--dataset-dir",type=str,default="output")
+    # parser.add_argument("--num-epochs",type=float,default=)
+    parser.add_argument("--lr",type=float,default=0.1)
+    parser.add_argument("--data-seed",type=int,default=0)
+    parser.add_argument("--train-seed",type=int,default=0)
+    parser.add_argument("--config-override",type=str,default="")
+    args = parser.parse_args()
+
+    # read config json and update the sysarg
+    with open("config.json", "r") as read_file:
+        config = json.load(read_file)
+
+    args_dict = vars(args)
+    config.update(args_dict)
+
+    if config["config_override"] == "":
+        del config['config_override']
+    else:
+        print(config['config_override'])
+        config_override = json.loads(config['config_override'])
+        del config['config_override']
+        config.update(config_override)
+
+    return config
+
+
+LR_DECAY = False
 
 
 class TrainEMNISTCluster(object):
@@ -65,6 +87,7 @@ class TrainEMNISTCluster(object):
 
         self.epoch = None
         self.lr = None
+        #self.cluster_switch = None
 
 
     def setup_datasets(self):
@@ -118,6 +141,7 @@ class TrainEMNISTCluster(object):
             self.dataset['test'] = dataset
 
         # import ipdb; ipdb.set_trace()
+
 
     def _setup_dataset(self, num_data, p, m, n, random = True):
 
@@ -222,8 +246,15 @@ class TrainEMNISTCluster(object):
         torch.manual_seed(self.config['train_seed'])
 
         p = self.config['p']
+        m = self.config['m']
+        local_model_init = self.config['local_model_init']
 
-        self.models = [ SimpleCNN().to(self.device) for p_i in range(p)] # p models with p different params of dimension(1,d)
+        if local_model_init:
+            self.models = [[SimpleCNN(h1 = self.config['h1']).to(self.device) for p_i in range(p)] for m_i in range(m)]
+
+        else:
+            global_models = [SimpleCNN(h1 = self.config['h1']).to(self.device) for p_i in range(p)]  # Create p models
+            self.models = [global_models for m_i in range(m)]  # Each client gets the same list of p models
 
         self.criterion = torch.nn.CrossEntropyLoss()
 
@@ -233,6 +264,8 @@ class TrainEMNISTCluster(object):
     def run(self):
         num_epochs = self.config['num_epochs']
         lr = self.config['lr']
+
+        #self.cluster_switch = [[0 for _ in range(self.config['p'])] for m_i in range(self.config['m'])] 
 
         results = []
 
@@ -304,24 +337,6 @@ class TrainEMNISTCluster(object):
                 self.save_checkpoint()
                 print(f'checkpoint written at {self.checkpoint_fname}')
 
-        # plt.figure(figsize=(10,5))
-        # plt.plot([r['train']['loss'] for r in results], label='train loss')
-        # plt.xlabel('epoch')
-        # plt.ylabel('loss')
-        # plt.title('Training Loss per Epoch')
-        # plt.legend()
-        # plt.grid(True)
-        # plt.savefig(os.path.join(self.config['project_dir'], 'train_loss.png'))
-        # # import ipdb; ipdb.set_trace()
-
-        # plt.figure(figsize=(10,5))
-        # plt.plot([r['test']['acc'] for r in results], label='test acc')
-        # plt.xlabel('epoch')
-        # plt.ylabel('test accuracy')
-        # plt.title('Test Accuracy per Epoch')
-        # plt.legend()
-        # plt.grid(True)
-        # plt.savefig(os.path.join(self.config['project_dir'], 'test_acc.png'))
 
         return results
 
@@ -333,7 +348,7 @@ class TrainEMNISTCluster(object):
         if epoch % 50 == 0 and epoch != 0 and LR_DECAY:
             self.lr = self.lr * 0.1
 
-        return self.lr
+        return self.lr        
 
 
     def print_epoch_stats(self, res):
@@ -368,14 +383,13 @@ class TrainEMNISTCluster(object):
         t0 = time.time()
 
 
-        updated_models = []
         for m_i in range(m):
             if VERBOSE and m_i % 100 == 0: print(f'm {m_i}/{m} processing \r', end ='')
 
             (X, y) = self.load_data(m_i)
 
             p_i = cluster_assign[m_i]
-            model = copy.deepcopy(self.models[p_i])
+            model = self.models[m_i][p_i]
 
             # LOCAL UPDATE PER MACHINE tau times
             for step_i in range(tau):
@@ -389,7 +403,6 @@ class TrainEMNISTCluster(object):
 
             model.zero_grad()
 
-            updated_models.append(model)
 
         t02 = time.time()
         # print(f'running single ..took {t02-t01:.3f}sec')
@@ -401,16 +414,8 @@ class TrainEMNISTCluster(object):
         # apply gradient update
         t0 = time.time()
 
-        # CLUSTER MACHINES INTO p_i's
-        local_models = [[] for p_i in range(p)]
-        for m_i in range(m):
-            p_i = cluster_assign[m_i]
-            local_models[p_i].append(updated_models[m_i])
-
         # NEEDS TO BE DECENTRALIZED
-        for p_i, models in enumerate(local_models):
-            if len(models) > 0:
-                self.global_param_update(models, self.models[p_i])
+        self.dec_param_update(cluster_assign)
         t1 = time.time()
 
         if VERBOSE: print(f'global update {t1-t0:.3f}sec')
@@ -462,7 +467,7 @@ class TrainEMNISTCluster(object):
             (X, y) = self.load_data(m_i, train=train) # load batch data rotated
 
             for p_i in range(p):
-                y_logit = self.models[p_i](X)
+                y_logit = self.models[m_i][p_i](X)
                 loss = self.criterion(y_logit, y) # loss of
                 n_correct = self.n_correct(y_logit, y)
 
@@ -478,6 +483,7 @@ class TrainEMNISTCluster(object):
         cluster_assign = []
         for m_i in range(m):
             machine_losses = [ losses[(m_i,p_i)] for p_i in range(p) ]
+            #print("Machine Losses:", machine_losses)
             min_p_i = np.argmin(machine_losses)
             cluster_assign.append(min_p_i)
 
@@ -493,27 +499,21 @@ class TrainEMNISTCluster(object):
             min_corrects.append(min_correct)
 
         # print("losses: ", min_losses)
-        loss = np.mean(min_losses)
-        acc = np.sum(min_corrects) / num_data
+
+        if train:
+            loss = np.mean(min_losses)
+            acc = np.sum(min_corrects) / num_data
+
+        else:
+            loss, acc = self.test_all()
 
 
         # check cluster assignment acc
         cl_acc = self.get_cluster_accuracy(dataset['cluster_assign'], cluster_assign)
         cl_ct = [np.sum(np.array(cluster_assign) == p_i ) for p_i in range(p)]
 
-        # ca_t = np.array(cluster_assign)
-        # ca_acc = []
-        # portion = m / p
-        # index=0
-        # for p_i in range(1, p+1):
-        #     split = ca_t[index:int(portion*p_i)].tolist()
-        #     most_common = max(set(split), key=split.count)
-        #     count = split.count(most_common)
-        #     ca_acc.append(count / len(split))
-        #     index = int(portion*p_i)
-
-        # print("cluster assign acc: ", ca_acc)
-        # ca_acc = np.mean(ca_acc)
+        # improved cluster assignment acc (model 2 can work better on clients with p=3)
+        
 
         res = {} # results
         # res['losses'] = losses
@@ -525,7 +525,6 @@ class TrainEMNISTCluster(object):
         res['cl_acc'] = cl_acc
         res['cl_ct'] = cl_ct
         res['is_train'] = train
-        # res['ca_acc'] = ca_acc
 
         # import ipdb; ipdb.set_trace()
 
@@ -586,22 +585,51 @@ class TrainEMNISTCluster(object):
         # import ipdb; ipdb.set_trace() # we need to check the output of name, check if duplicate exists
 
 
-    def global_param_update(self, local_models, global_model):
+    def dec_param_update(self, cluster_assign):
 
-        # average of each weight
+        num_clients = self.config['m']
 
-        weights = {}
+        client_indices = list(range(num_clients)) 
 
-        for m_i, local_model in enumerate(local_models):
-            for name, param in local_model.named_parameters():
-                if name not in weights:
-                    weights[name] = torch.zeros_like(param.data)
+        for m_i in range(num_clients):
 
-                weights[name] += param.data
+            counts = {i: 0 for i in range(self.config['p'])}
+            for value in cluster_assign:
+                counts[value] += 1
 
-        for name, param in global_model.named_parameters():
-            weights[name] /= len(local_models)
-            param.data = weights[name]
+            num_cluster_i = counts[cluster_assign[m_i]]
+            num_cluster_rest = num_clients - num_cluster_i
+
+            threshold_j = min(num_cluster_rest, 100)
+            threshold_i = min(num_cluster_i, 100)
+
+            # threshold_j = min(num_cluster_rest, int(np.floor(e/2)))
+            # threshold_i = min(num_cluster_i, int(np.floor(e/2))) - 1
+
+            if threshold_i <=1 or threshold_j<= 1:
+                continue
+
+            selected_clients = random.sample([i for i in client_indices if i != m_i], torch.randint(1, min(threshold_i,threshold_j), (1,)))
+            # selected_clients += random.sample([i for i in client_indices if i != m_i and cluster_assign[m_i] == cluster_assign[i]], threshold_i)
+            m_i_cluster = cluster_assign[m_i]
+            for m_j in selected_clients:
+                m_j_cluster = cluster_assign[m_j]
+
+                m_j_params = dict(self.models[m_j][m_j_cluster].named_parameters())
+
+                if m_i_cluster == m_j_cluster:
+                    for name, param in self.models[m_i][m_i_cluster].named_parameters():
+                        m_i_param = param.data.clone()
+                        m_j_param = m_j_params[name].data.clone()
+                        alpha = 0.5
+                        param.data = (m_i_param + m_j_param) / 2     
+
+                else:
+                    for name, param in self.models[m_i][m_j_cluster].named_parameters():
+                        m_i_param = param.data.clone()
+                        m_j_param = m_j_params[name].data.clone()
+                        alpha = 0.5
+                        param.data = alpha * m_i_param + (1 - alpha) * m_j_param
 
         # import ipdb; ipdb.set_trace()
 
@@ -609,6 +637,108 @@ class TrainEMNISTCluster(object):
     def test(self, train=False):
         return self.get_inference_stats(train=train)
 
+    def load_test_data(self, m_i, train=False):
+        cfg = self.config
+
+        p = cfg['p']
+
+        if train:
+            dataset = self.dataset['train']
+        else:
+            dataset = self.dataset['test']
+
+        indices = dataset['data_indices'][m_i]
+        p_i = dataset['cluster_assign'][m_i]
+
+        X_batch = dataset['X'][indices]
+        y_batch = dataset['y'][indices]
+
+        data = []
+
+        if p == 4:
+            rotation_list = [0, 1, 2, 3] 
+        elif p == 2:
+            rotation_list = [0, 2]        
+        elif p == 1:
+            rotation_list = [0]          
+        else:
+            raise NotImplementedError("Only p=1,2,4 supported")
+
+        for k in rotation_list:
+            X_batch2 = torch.rot90(X_batch, k=int(k), dims=(2, 3))
+            data.append(X_batch2)
+
+        return data, y_batch
+
+    def test_all(self, train=False):
+        cfg = self.config
+        m = cfg['m_test']
+        dataset = self.dataset['test']
+
+        p = cfg['p']
+
+        num_data = 0
+        losses = []
+        corrects = []
+        for m_i in range(m):
+            
+            (data, y) = self.load_test_data(m_i, train=train)
+
+            for p_i in range(p):
+                X = data[p_i]
+                loss_m_i = []
+                correct_m_i = []
+                for model in range(p):
+                    y_logit = self.models[m_i][model](X)
+                    loss_m_i.append(self.criterion(y_logit, y))
+                    correct_m_i.append(self.n_correct(y_logit, y))
+
+                loss = np.min([l.item() for l in loss_m_i])
+                n_correct = np.max(correct_m_i)
+
+                # if torch.isnan(loss):
+                #     print("nan loss: ", dataset['data_indices'][m_i])
+
+                losses.append(loss)
+                corrects.append(n_correct)
+
+                num_data += X.shape[0]
+
+        loss = np.mean(losses)
+        acc = np.sum(corrects) / num_data
+
+        # print(f"Average loss over all clients and models: {loss:.3f}")
+        # print(f"Average accuracy over all clients and models: {acc:.3f}")    
+
+        return loss, acc
+
+
+
     def save_checkpoint(self):
         models_to_save = [model.state_dict() for model in self.models]
         torch.save({'models':models_to_save}, self.checkpoint_fname)
+
+
+class SimpleCNN(nn.Module):
+    def __init__(self, h1=128):
+        super(SimpleCNN, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1)
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
+        self.fc1 = nn.Linear(64 * 7 * 7, h1)
+        self.fc2 = nn.Linear(h1, 47)
+
+    def forward(self, x):
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = x.view(-1, 64 * 7 * 7)
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        return F.log_softmax(x, dim=1)
+    
+
+if __name__ == '__main__':
+    start_time = time.time()
+    main()
+    duration = (time.time() - start_time)
+    print("---train cluster Ended in %0.2f hour (%.3f sec) " % (duration/float(3600), duration))

@@ -1,22 +1,14 @@
-import argparse
-import json
 import os
 import time
-import itertools
 import pickle
-import copy
 import random
-import math
 
-import seaborn as sns
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch.optim as optim
 import torchvision
 import torchvision.datasets as datasets
-from torch.utils.data import DataLoader, Dataset, TensorDataset
+from torch.utils.data import DataLoader
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import confusion_matrix
 
@@ -541,17 +533,8 @@ class TrainEMNISTCluster(object):
 
         num_clients = self.config['m']
 
-        if num_clients <= 4:
+        if num_clients <= 1:
             return
-
-        max_e = 100
-        if num_clients <= max_e:
-            e = num_clients - 1
-        else:
-            e = min(max_e, int(np.log(num_clients) * 20))
-
-        if e >= num_clients:
-            e = num_clients - 1
 
         client_indices = list(range(num_clients)) 
 

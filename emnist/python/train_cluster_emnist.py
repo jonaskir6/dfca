@@ -5,11 +5,7 @@ import time
 import itertools
 import pickle
 import copy
-import random
-import math
 
-import seaborn as sns
-import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -25,31 +21,55 @@ import numpy as np
 
 from util import *
 
-
+# LR_DECAY = True
 LR_DECAY = False
 
-class SimpleCNN(nn.Module):
-    def __init__(self):
-        super(SimpleCNN, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, stride=1, padding=1)
-        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1)
-        self.pool = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
-        self.fc1 = nn.Linear(64 * 7 * 7, 128)
-        self.fc2 = nn.Linear(128, 47)
+def main():
 
-    def forward(self, x):
-        x = self.pool(F.relu(self.conv1(x)))
-        x = self.pool(F.relu(self.conv2(x)))
-        x = x.view(-1, 64 * 7 * 7)
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
-        return F.log_softmax(x, dim=1)
+    config = get_config()
+
+    # config['train_seed'] = config['data_seed']
+
+    print("config:",config)
+
+    exp = TrainEMNISTCluster(config)
+    exp.setup()
+    exp.run()
+
+
+def get_config():
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--project-dir",type=str,default="output")
+    parser.add_argument("--dataset-dir",type=str,default="output")
+    # parser.add_argument("--num-epochs",type=float,default=)
+    parser.add_argument("--lr",type=float,default=0.1)
+    parser.add_argument("--data-seed",type=int,default=0)
+    parser.add_argument("--train-seed",type=int,default=0)
+    parser.add_argument("--config-override",type=str,default="")
+    args = parser.parse_args()
+
+    # read config json and update the sysarg
+    with open("config.json", "r") as read_file:
+        config = json.load(read_file)
+
+    args_dict = vars(args)
+    config.update(args_dict)
+
+    if config["config_override"] == "":
+        del config['config_override']
+    else:
+        print(config['config_override'])
+        config_override = json.loads(config['config_override'])
+        del config['config_override']
+        config.update(config_override)
+
+    return config
 
 
 class TrainEMNISTCluster(object):
-    def __init__(self, config, device):
+    def __init__(self, config):
         self.config = config
-        self.device = device
 
         assert self.config['m'] % self.config['p'] == 0
 
@@ -117,7 +137,6 @@ class TrainEMNISTCluster(object):
             dataset['y'] = y
             self.dataset['test'] = dataset
 
-        # import ipdb; ipdb.set_trace()
 
     def _setup_dataset(self, num_data, p, m, n, random = True):
 
@@ -155,8 +174,7 @@ class TrainEMNISTCluster(object):
 
 
         return data_indices, cluster_assign
-
-
+    
     def _setup_dataset_random_n(self, num_data, p, m, n, random = True):
 
         # print("m:",m)
@@ -215,15 +233,13 @@ class TrainEMNISTCluster(object):
         return X, y
 
 
-    # Need p models for each client
-
     def setup_models(self):
-        np.random.seed(self.config['train_seed'])
-        torch.manual_seed(self.config['train_seed'])
+        # np.random.seed(self.config['train_seed'])
+        # torch.manual_seed(self.config['train_seed'])
 
         p = self.config['p']
 
-        self.models = [ SimpleCNN().to(self.device) for p_i in range(p)] # p models with p different params of dimension(1,d)
+        self.models = [ SimpleCNN(h1 = self.config['h1']) for p_i in range(p)] # p models with p different params of dimension(1,d)
 
         self.criterion = torch.nn.CrossEntropyLoss()
 
@@ -304,27 +320,7 @@ class TrainEMNISTCluster(object):
                 self.save_checkpoint()
                 print(f'checkpoint written at {self.checkpoint_fname}')
 
-        # plt.figure(figsize=(10,5))
-        # plt.plot([r['train']['loss'] for r in results], label='train loss')
-        # plt.xlabel('epoch')
-        # plt.ylabel('loss')
-        # plt.title('Training Loss per Epoch')
-        # plt.legend()
-        # plt.grid(True)
-        # plt.savefig(os.path.join(self.config['project_dir'], 'train_loss.png'))
-        # # import ipdb; ipdb.set_trace()
-
-        # plt.figure(figsize=(10,5))
-        # plt.plot([r['test']['acc'] for r in results], label='test acc')
-        # plt.xlabel('epoch')
-        # plt.ylabel('test accuracy')
-        # plt.title('Test Accuracy per Epoch')
-        # plt.legend()
-        # plt.grid(True)
-        # plt.savefig(os.path.join(self.config['project_dir'], 'test_acc.png'))
-
-        return results
-
+        # import ipdb; ipdb.set_trace()
 
     def lr_schedule(self, epoch):
         if self.lr is None:
@@ -407,7 +403,6 @@ class TrainEMNISTCluster(object):
             p_i = cluster_assign[m_i]
             local_models[p_i].append(updated_models[m_i])
 
-        # NEEDS TO BE DECENTRALIZED
         for p_i, models in enumerate(local_models):
             if len(models) > 0:
                 self.global_param_update(models, self.models[p_i])
@@ -429,6 +424,7 @@ class TrainEMNISTCluster(object):
 
         return np.array(losses)
     
+
     def get_cluster_accuracy(self, actual, pred):
         
         cm = confusion_matrix(actual, pred)
@@ -525,7 +521,6 @@ class TrainEMNISTCluster(object):
         res['cl_acc'] = cl_acc
         res['cl_ct'] = cl_ct
         res['is_train'] = train
-        # res['ca_acc'] = ca_acc
 
         # import ipdb; ipdb.set_trace()
 
@@ -536,8 +531,6 @@ class TrainEMNISTCluster(object):
         correct = (predicted == y).sum().item()
 
         return correct
-
-    # TODO Does every Cluster get 4 clients with the same data, but rotated differently?
 
     def load_data(self, m_i, train=True):
         # this part is very fast since its just rearranging models
@@ -566,11 +559,12 @@ class TrainEMNISTCluster(object):
         else:
             raise NotImplementedError("only p=1,2,4 supported")
 
-        X_batch2 = torch.rot90(X_batch, k=int(k), dims = (2,3))
+        X_batch2 = torch.rot90(X_batch, k=int(k), dims = (1,2))
+        X_batch3 = X_batch2.reshape(-1, 28 * 28)
 
         # import ipdb; ipdb.set_trace()
 
-        return X_batch2, y_batch
+        return X_batch3, y_batch
 
 
     def local_param_update(self, model, lr):
@@ -607,8 +601,33 @@ class TrainEMNISTCluster(object):
 
 
     def test(self, train=False):
+
         return self.get_inference_stats(train=train)
 
     def save_checkpoint(self):
         models_to_save = [model.state_dict() for model in self.models]
         torch.save({'models':models_to_save}, self.checkpoint_fname)
+
+
+class SimpleCNN(nn.Module):
+    def __init__(self, h1=128):
+        super(SimpleCNN, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1)
+        self.pool = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
+        self.fc1 = nn.Linear(64 * 7 * 7, h1)
+        self.fc2 = nn.Linear(h1, 47)
+
+    def forward(self, x):
+        x = self.pool(F.relu(self.conv1(x)))
+        x = self.pool(F.relu(self.conv2(x)))
+        x = x.view(-1, 64 * 7 * 7)
+        x = F.relu(self.fc1(x))
+        x = self.fc2(x)
+        return F.log_softmax(x, dim=1)
+
+if __name__ == '__main__':
+    start_time = time.time()
+    main()
+    duration = (time.time() - start_time)
+    print("---train cluster Ended in %0.2f hour (%.3f sec) " % (duration/float(3600), duration))
