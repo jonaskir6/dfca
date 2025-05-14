@@ -3,6 +3,7 @@ import time
 import pickle
 import argparse
 import random
+import copy
 import json
 
 import torch
@@ -254,7 +255,7 @@ class TrainEMNISTCluster(object):
 
         else:
             global_models = [SimpleCNN(h1 = self.config['h1']).to(self.device) for p_i in range(p)]  # Create p models
-            self.models = [global_models for m_i in range(m)]  # Each client gets the same list of p models
+            self.models = [[copy.deepcopy(model) for model in global_models] for m_i in range(m)]  # Each client gets the same list of p models
 
         self.criterion = torch.nn.CrossEntropyLoss()
 

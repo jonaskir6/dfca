@@ -4,6 +4,7 @@ import pickle
 import argparse
 import random
 import json
+import copy
 
 import torch
 import torch.nn as nn
@@ -253,8 +254,8 @@ class TrainEMNISTCluster(object):
             self.models = [[SimpleCNN(h1 = self.config['h1']).to(self.device) for p_i in range(p)] for m_i in range(m)]
 
         else:
-            global_models = [SimpleCNN(h1 = self.config['h1']).to(self.device) for p_i in range(p)]  # Create p models
-            self.models = [global_models for m_i in range(m)]  # Each client gets the same list of p models
+            global_models = [SimpleLinear(h1 = self.config['h1']).to(self.device) for p_i in range(p)]  # Create p models
+            self.models = [[copy.deepcopy(model) for model in global_models] for m_i in range(m)]  # Each client gets the same list of p models
 
         self.criterion = torch.nn.CrossEntropyLoss()
 

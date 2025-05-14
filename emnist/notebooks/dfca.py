@@ -11,6 +11,7 @@ import torchvision.datasets as datasets
 from torch.utils.data import DataLoader
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import confusion_matrix
+import copy
 
 import numpy as np
 
@@ -163,11 +164,11 @@ class TrainEMNISTCluster(object):
         local_model_init = self.config['local_model_init']
 
         if local_model_init:
-            self.models = [[SimpleCNN().to(self.device) for p_i in range(p)] for m_i in range(m)]
+            self.models = [[SimpleCNN(h1 = self.config['h1']).to(self.device) for p_i in range(p)] for m_i in range(m)]
 
         else:
-            global_models = [SimpleCNN().to(self.device) for p_i in range(p)]  # Create p models
-            self.models = [global_models for m_i in range(m)]  # Each client gets the same list of p models
+            global_models = [SimpleCNN(h1 = self.config['h1']).to(self.device) for p_i in range(p)]  # Create p models
+            self.models = [[copy.deepcopy(model) for model in global_models] for m_i in range(m)]  # Each client gets the same list of p models
 
         self.criterion = torch.nn.CrossEntropyLoss()
 
@@ -666,13 +667,13 @@ class TrainEMNISTCluster(object):
         torch.save({'models':models_to_save}, self.checkpoint_fname)
 
 class SimpleCNN(nn.Module):
-    def __init__(self):
+    def __init__(self, h1=128):
         super(SimpleCNN, self).__init__()
         self.conv1 = nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, stride=1, padding=1)
         self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1)
         self.pool = nn.MaxPool2d(kernel_size=2, stride=2, padding=0)
-        self.fc1 = nn.Linear(64 * 7 * 7, 128)
-        self.fc2 = nn.Linear(128, 47)
+        self.fc1 = nn.Linear(64 * 7 * 7, h1)
+        self.fc2 = nn.Linear(h1, 47)
 
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))
