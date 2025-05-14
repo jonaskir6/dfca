@@ -570,6 +570,9 @@ class TrainEMNISTCluster(object):
             # threshold_j = min(num_cluster_rest, int(np.floor(e/2)))
             # threshold_i = min(num_cluster_i, int(np.floor(e/2))) - 1
 
+            if threshold_i <=1 or threshold_j<= 1:
+                continue
+
             selected_clients = random.sample([i for i in client_indices if i != m_i], torch.randint(1, min(threshold_i,threshold_j), (1,)))
             # selected_clients += random.sample([i for i in client_indices if i != m_i and cluster_assign[m_i] == cluster_assign[i]], threshold_i)
             m_i_cluster = cluster_assign[m_i]

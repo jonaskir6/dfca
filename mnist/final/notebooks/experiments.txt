@@ -1,0 +1,10 @@
+MNIST Experiments on MLP:
+
+1. dfca-li, dfca-gi & ifca with lr=0.1, 0.01 and 5 different seeds on m, n = 1200, 200 (300 epochs) ca 17h
+
+2. dfca-li, dfca-gi & ifca with lr=0.1 with 5 different seeds on m, n = 1200, 200 (300 epochs) ca 9h
+
+3. dfca-li, dfca-gi & ifca with lr=0.1 with 5 different seeds on m, n = 2400, 100 (300 epochs)
+
+4. dfca-li, dfca-gi & ifca with lr=0.1 with 5 different seeds on m, n = 4800, 50 (300 epochs)
+

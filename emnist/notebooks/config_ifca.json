@@ -7,11 +7,11 @@
 
     "h1": 128,
 
-    "num_epochs": 5,
+    "num_epochs": 100,
 
     "batch_size":100,
     "tau":5,
-    "lr":0.001,
+    "lr":0.1,
 
     "data_seed":10,
     "train_seed":10,
