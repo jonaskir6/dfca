@@ -1,0 +1,19 @@
+{
+    "m" : 200,
+    "m_test" : 40,
+    "p" : 2,
+    "n" : 500,
+    "uneven": false,
+    "local_model_init": false,
+    "participation_rate":1,
+
+    "num_epochs": 600,
+
+    "batch_size":50,
+    "tau":5,
+    "lr":0.25,
+
+    "data_seed":0,
+    "train_seed":0,
+    "project_dir": "output"
+}
