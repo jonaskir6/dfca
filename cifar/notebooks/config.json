@@ -5,7 +5,7 @@
     "n" : 500,
     "uneven": false,
     "local_model_init": false,
-    "participation_rate":1,
+    "participation_rate":0.2,
 
     "num_epochs": 600,
 
