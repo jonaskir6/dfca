@@ -102,6 +102,45 @@ class TrainMNISTCluster(object):
         # import ipdb; ipdb.set_trace()
 
 
+    def _setup_dataset(self, num_data, p, m, n, random = True):
+
+        # print("m:",m)
+        # print("p:",p)
+        # print("n:",n)
+        # print("num_data:",num_data)
+        assert (m // p) * n == num_data
+
+        dataset = {}
+
+        cfg = self.config
+
+        data_indices = []
+        cluster_assign = []
+
+        m_per_cluster = m // p
+
+        for p_i in range(p):
+
+            if random:
+                ll = list(np.random.permutation(num_data))
+            else:
+                ll = list(range(num_data))
+
+            ll2 = chunkify(ll, m_per_cluster) # splits ll into m lists with size n
+            data_indices += ll2
+
+            cluster_assign += [p_i for _ in range(m_per_cluster)]
+
+        print(type(data_indices))
+        data_indices = np.array(data_indices)
+        cluster_assign = np.array(cluster_assign)
+        assert data_indices.shape[0] == cluster_assign.shape[0]
+        assert data_indices.shape[0] == m
+
+
+        return data_indices, cluster_assign
+
+
     def _setup_dataset_random_n(self, num_data, p, m, n, random = True):
 
         # print("m:",m)

@@ -4,7 +4,7 @@
     "p" : 2,
     "n" : 500,
 
-    "participation_rate":0.1,
+    "participation_rate":0.5,
 
     "num_epochs": 600,
 
