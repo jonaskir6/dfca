@@ -2,6 +2,7 @@ import os
 import time
 import pickle
 import random
+import copy
 
 import torch
 import torch.nn as nn
@@ -213,21 +214,12 @@ class TrainCIFARCluster(object):
         local_model_init = self.config['local_model_init']
         lr = self.config['lr']
 
-        if local_model_init:
-            self.models = [[SimpleCNN().to(self.device) for p_i in range(p)] for m_i in range(m)]
-
-        else:
-            global_models = [SimpleCNN().to(self.device) for p_i in range(p)]  # Create p models
-            self.models = [global_models for m_i in range(m)]  # Each client gets the same list of p models
+        self.models = [SimpleCNN().to(self.device) for p_i in range(p)]  # Create p models
 
         self.criterion = torch.nn.CrossEntropyLoss()
         self.cluster_assign = []
 
-        self.optimizers = [
-            [torch.optim.SGD(self.models[m_i][p_i].parameters(), lr=lr)
-            for p_i in range(p)]
-            for m_i in range(m)
-        ]
+        self.optimizers = [torch.optim.SGD(self.models[p_i].parameters(), lr=lr) for p_i in range(p)]
         # import ipdb; ipdb.set_trace()
 
 
@@ -435,6 +427,7 @@ class TrainCIFARCluster(object):
         # run local update
         t0 = time.time()
 
+        updated_models = []
 
         for m_i in participating_nodes:
             if VERBOSE and m_i % 100 == 0: print(f'm {m_i}/{m} processing \r', end ='')
@@ -445,9 +438,9 @@ class TrainCIFARCluster(object):
             dl = DataLoader(ds, batch_size=batch_size, shuffle=True)
 
             p_i = cluster_assign[m_i]
-            model = self.models[m_i][p_i]
+            model = copy.deepcopy(self.models[p_i])
 
-            optim = self.optimizers[m_i][p_i]
+            optim = self.optimizers[p_i]
 
             for step_i in range(tau):
                 for x, y in dl:
@@ -461,6 +454,8 @@ class TrainCIFARCluster(object):
 
             optim.zero_grad()
 
+            updated_models.append(model)
+
 
         t02 = time.time()
         # print(f'running single ..took {t02-t01:.3f}sec')
@@ -472,8 +467,17 @@ class TrainCIFARCluster(object):
         # apply gradient update
         t0 = time.time()
 
-        # NEEDS TO BE DECENTRALIZED
-        self.dec_param_update()
+        # CLUSTER MACHINES INTO p_i's
+        local_models = [[] for p_i in range(p)]
+        for m_i2, m_i in enumerate(participating_nodes):
+            p_i = cluster_assign[m_i]
+            local_models[p_i].append(updated_models[m_i2])
+
+        for p_i, models in enumerate(local_models):
+            if len(models) > 0:
+                self.global_param_update(models, self.models[p_i])
+        t1 = time.time()
+
         t1 = time.time()
 
         if VERBOSE: print(f'global update {t1-t0:.3f}sec')
@@ -515,7 +519,7 @@ class TrainCIFARCluster(object):
             (X, y) = self.load_data(m_i, train=train) # load batch data rotated
 
             for p_i in range(p):
-                y_logit = self.models[m_i][p_i](X)
+                y_logit = self.models[p_i](X)
                 loss = self.criterion(y_logit, y) # loss of
                 n_correct = self.n_correct(y_logit, y)
 
@@ -551,11 +555,9 @@ class TrainCIFARCluster(object):
 
         if train:
             self.cluster_assign = cluster_assign
-            loss = np.mean(min_losses)
-            acc = np.sum(min_corrects) / num_data
 
-        else:
-            loss, acc = self.test_all()
+        loss = np.mean(min_losses)
+        acc = np.sum(min_corrects) / num_data
 
 
         # check cluster assignment acc
@@ -647,149 +649,30 @@ class TrainCIFARCluster(object):
 
         # import ipdb; ipdb.set_trace() # we need to check the output of name, check if duplicate exists
 
+    def global_param_update(self, local_models, global_model):
 
-    def dec_param_update(self):     
-        cluster_assign = self.cluster_assign
-        p = self.config['p']
-        participating_nodes = self.participating_nodes
-        num_clients = len(participating_nodes)
+        # average of each weight
 
-        if num_clients <= 1:
-            return
+        weights = {}
 
-        client_indices = list(range(num_clients)) 
+        for m_i, local_model in enumerate(local_models):
+            for name, param in local_model.named_parameters():
+                if name not in weights:
+                    weights[name] = torch.zeros_like(param.data)
 
-        counts = {i: 0 for i in range(p)}
-        for m_i2, m_i in enumerate(participating_nodes):
-            counts[cluster_assign[m_i]] += 1
+                weights[name] += param.data
 
-        for m_i2, m_i in enumerate(participating_nodes):
-            num_cluster_i = counts[cluster_assign[m_i]]
-            num_cluster_rest = num_clients - num_cluster_i
-
-            th_j = min(num_cluster_rest, 100)
-            th_i = min(num_cluster_i, 100)
-            th = min(th_i, th_j)
-
-            # threshold_j = min(num_cluster_rest, int(np.floor(e/2)))
-            # threshold_i = min(num_cluster_i, int(np.floor(e/2))) - 1
-
-            if th <= 1:
-                continue
-
-            selected_clients = random.sample([i for i in client_indices if i != m_i], torch.randint(min(5, th), th, (1,)))
-            # selected_clients = random.sample([i for i in client_indices if i != m_i], min(threshold_i,threshold_j))
-            # selected_clients += random.sample([i for i in client_indices if i != m_i and cluster_assign[m_i] == cluster_assign[i]], threshold_i)
-            m_i_cluster = cluster_assign[m_i]
-            for m_j in selected_clients:
-                m_j_cluster = cluster_assign[m_j]
-
-                m_j_params = dict(self.models[m_j][m_j_cluster].named_parameters())
-
-                if m_i_cluster == m_j_cluster:
-                    for name, param in self.models[m_i][m_i_cluster].named_parameters():
-                        m_i_param = param.data.clone()
-                        m_j_param = m_j_params[name].data.clone()
-                        alpha = 0.5
-                        param.data = (m_i_param + m_j_param) / 2     
-
-                else:
-                    for name, param in self.models[m_i][m_j_cluster].named_parameters():
-                        m_i_param = param.data.clone()
-                        m_j_param = m_j_params[name].data.clone()
-                        alpha = 0.5
-                        param.data = alpha * m_i_param + (1 - alpha) * m_j_param
+        for name, param in global_model.named_parameters():
+            weights[name] /= len(local_models)
+            param.data = weights[name]
 
         # import ipdb; ipdb.set_trace()
+
 
 
     def test(self, train=False):
         return self.get_inference_stats(train=train)
 
-    def load_test_data(self, m_i, train=False):
-        cfg = self.config
-
-        p = cfg['p']
-
-        if train:
-            dataset = self.dataset['train']
-        else:
-            dataset = self.dataset['test']
-
-        indices = dataset['data_indices'][m_i]
-        p_i = dataset['cluster_assign'][m_i]
-
-        X_batch = [dataset['X'][i] for i in indices]  # PIL Images
-        y_batch = [dataset['y'][i] for i in indices]
-
-        data = []
-
-        if p == 4:
-            rotation_list = [0, 1, 2, 3] 
-        elif p == 2:
-            rotation_list = [0, 2]        
-        elif p == 1:
-            rotation_list = [0]          
-        else:
-            raise NotImplementedError("Only p=1,2,4 supported")
-
-        for k in rotation_list:
-            if train:
-                X_batch2 = [self.train_transform(img) for img in X_batch]  # Now tensors
-            else:
-                X_batch2 = [self.test_transform(img) for img in X_batch]  # Now tensors
-
-            X_batch2 = torch.stack(X_batch2).to(self.device)
-
-            X_batch2 = torch.rot90(X_batch2, k=int(k), dims=(2,3))
-
-            data.append(X_batch2)
-        
-        y_batch = torch.tensor(y_batch).to(self.device)
-
-        return data, y_batch
-
-    def test_all(self, train=False):
-        cfg = self.config
-        m = cfg['m_test']
-        dataset = self.dataset['test']
-
-        p = cfg['p']
-
-        num_data = 0
-        losses = []
-        corrects = []
-        for m_i in range(m):
-            
-            (data, y) = self.load_test_data(m_i, train=train)
-
-            for p_i in range(p):
-                X = data[p_i]
-                loss_m_i = []
-                correct_m_i = []
-                for model in range(p):
-                    y_logit = self.models[m_i][model](X)
-                    loss_m_i.append(self.criterion(y_logit, y))
-                    correct_m_i.append(self.n_correct(y_logit, y))
-
-                loss = np.min([l.item() for l in loss_m_i])
-                n_correct = np.max(correct_m_i)
-
-                # if torch.isnan(loss):
-                #     print("nan loss: ", dataset['data_indices'][m_i])
-
-                losses.append(loss)
-                corrects.append(n_correct)
-
-                num_data += X.shape[0]
-
-        loss = np.mean(losses)
-        acc = np.sum(corrects) / num_data
-
-        # print(f"Average loss over all clients and models: {loss:.3f}")
-        # print(f"Average accuracy over all clients and models: {acc:.3f}")    
-
-        return loss, acc
 
     def save_checkpoint(self):
         models_to_save = [model.state_dict() for model in self.models]

@@ -3,7 +3,7 @@
     "m_test" : 40,
     "p" : 2,
     "n" : 500,
-    "uneven": false,
+    "uneven": true,
     "local_model_init": false,
 
     "h1": 128,
