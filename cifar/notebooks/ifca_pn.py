@@ -189,7 +189,7 @@ class TrainCIFARCluster(object):
 
     def setup_models(self):
         np.random.seed(self.config['train_seed'])
-        torch.manual_seed(self.config['train_seed'])
+        # torch.manual_seed(self.config['train_seed'])
 
         p = self.config['p']
         m = self.config['m']
@@ -632,7 +632,7 @@ class SimpleCNN(nn.Module):
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))
         x = self.pool(F.relu(self.conv2(x)))
-        x = torch.flatten(x, 1)  # <-- Add this line
+        x = torch.flatten(x, 1)
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return x

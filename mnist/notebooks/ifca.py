@@ -610,49 +610,6 @@ class TrainMNISTCluster(object):
         # import ipdb; ipdb.set_trace()
 
 
-    def dec_param_update(self, local_models, global_model):
-
-        num_clients = len(local_models)
-
-        if num_clients == 0:
-            return
-
-        if num_clients == 1:
-            bc_client = dict(local_models[0].named_parameters())
-            for name, param in global_model.named_parameters():
-                param.data = bc_client[name].data.clone()
-            return
-
-        max_e = 100
-        if num_clients <= max_e:
-            e = num_clients - 1
-        else:
-            e = min(max_e, int(np.log(num_clients) * 10))
-
-        if e >= num_clients:
-            e = num_clients - 1
-
-        client_indices = list(range(num_clients))
-
-        for m_i, local_model in enumerate(local_models):
-            selected_clients = random.sample([i for i in client_indices if i != m_i], e)
-
-            for m_j in selected_clients:
-
-                m_j_params = dict(local_models[m_j].named_parameters())
-
-                for name, param in local_model.named_parameters():
-                    m_i_param = param.data.clone()
-                    m_j_param = m_j_params[name].data.clone()
-                    param.data = (m_i_param + m_j_param) / 2
-
-        bc_client = random.choice(client_indices)
-        bc_client_params = dict(local_models[bc_client].named_parameters())
-        for name, param in global_model.named_parameters():
-            param.data = bc_client_params[name].data.clone()
-
-        # import ipdb; ipdb.set_trace()
-
 
     def test(self, train=False):
         return self.get_inference_stats(train=train)
