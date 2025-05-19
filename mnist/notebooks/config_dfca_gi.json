@@ -1,14 +1,14 @@
 {
-    "m" : 1200,
-    "m_test" : 200,
+    "m" : 4800,
+    "m_test" : 800,
     "p" : 4,
-    "n" : 200,
+    "n" : 50,
     "uneven": true,
     "local_model_init": false,
 
     "h1": 200,
 
-    "num_epochs": 1,
+    "num_epochs": 300,
 
     "batch_size":100,
     "tau":10,
