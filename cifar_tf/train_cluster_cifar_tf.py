@@ -10,6 +10,8 @@ import tensorflow.compat.v1 as tf
 tf.disable_v2_behavior()
 
 import numpy as np
+from sklearn.metrics import confusion_matrix
+from scipy.optimize import linear_sum_assignment
 
 from util import *
 import cifar10
@@ -440,9 +442,10 @@ class TrainCIFARCluster(object):
         else:
             cl_str = ""
 
-        str0 = f"Epoch {self.epoch} {data_str}: l {res['loss']:.3f} a {res['acc']:.3f} {cl_str}{lr_str} {time_str}"
+        str0 = f"Epoch {self.epoch} {data_str}: l {res['loss']:.3f} a {res['acc']:.3f} {cl_str}{lr_str} cl_acc {res['cl_acc']:3f} {time_str}"
 
         print(str0)
+
 
     def train(self, lr):
 
@@ -534,6 +537,27 @@ class TrainCIFARCluster(object):
 
         if VERBOSE: print(f"train_whole {t1-t0:.3f} t_gd {time_train:.3f} t load data {time_load_data:.3f} t put model {t_put_weight:.3f} t get mdoel {t_get_weight:.3f}  averaging {t2-t1:.3f}")
 
+    def get_cluster_acc(self, cluster_assign, train, participating_nodes):
+        if train:
+            dataset = self.dataset['train']
+        else:
+            dataset = self.dataset['test']
+
+        actual = [int(dataset['cluster_assign'][m_i]) for m_i in participating_nodes]
+        pred = [int(cluster_assign[m_i]) for m_i in participating_nodes]
+        print(f"actual {actual}")
+        print(f"pred {pred}")
+        cm = confusion_matrix(actual, pred)
+
+        row_ind, col_ind = linear_sum_assignment(-cm)
+        matching = dict(zip(col_ind, row_ind))
+
+        remapped_preds = [matching[p] for p in pred]
+
+        cl_acc = np.mean(np.array(remapped_preds) == np.array(actual))
+
+        return cl_acc
+
     def test(self, train = True, force_full_nodes = False):
 
         VERBOSE = 0
@@ -624,6 +648,8 @@ class TrainCIFARCluster(object):
         # cl_acc = np.mean(np.array(cluster_assign) == np.array(dataset['cluster_assign']))
         cl_ct = [np.sum(np.array(cluster_assign) == p_i ) for p_i in range(p)]
 
+        cl_acc = self.get_cluster_acc(cluster_assign, train, participating_nodes)
+
 
         cluster_assign_ans = dataset['cluster_assign']
         cluster_assign_ans_part = np.array(cluster_assign_ans)[participating_nodes]
@@ -635,7 +661,7 @@ class TrainCIFARCluster(object):
         # res['cluster_assign'] = cluster_assign
         res['loss'] = loss
         res['acc'] = acc
-        # res['cl_acc'] = cl_acc
+        res['cl_acc'] = cl_acc
         res['cl_ct'] = cl_ct
         res['cl_ct_ans'] = cl_ct_ans
         res['is_train'] = train

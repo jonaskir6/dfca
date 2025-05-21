@@ -381,7 +381,7 @@ class TrainCIFARCluster(object):
         if cfg['p'] == 4:
             th = 0.1
         elif cfg['p'] == 2:
-            th = 0.35
+            th = 0.4
         elif cfg['p'] == 1:
             th = 0.0
         else:
@@ -451,7 +451,7 @@ class TrainCIFARCluster(object):
         else:
             cl_str = ""
 
-        str0 = f"Epoch {self.epoch} {data_str}: l {res['loss']:.3f} a {res['acc']:.3f} {cl_str}{lr_str} {time_str}"
+        str0 = f"Epoch {self.epoch} {data_str}: l {res['loss']:.3f} a {res['acc']:.3f} {cl_str}{lr_str} cl_acc {res['cl_acc']:.3f} {time_str}"
 
         print(str0)
 
@@ -531,40 +531,42 @@ class TrainCIFARCluster(object):
 
         # averaging
 
-        counts = {i: 0 for i in range(p)}
-        for m_i2, m_i in enumerate(participating_nodes):
-            counts[cluster_assign[m_i]] += 1
-
+        # calculate the maximum number of possible exchange partners for m_i (capped at 100)
+        num_clients = len(participating_nodes)
+        min_partners = num_clients-1
+        th = min(min_partners, 10)
         exchanges = 0
 
+        if th <= 1:
+            return
+
+        exchange_list = [random.sample([i for i in participating_nodes if i != m_i], int(np.random.randint(min(1, th-1), th, (1,)).item())) for m_i in range(num_clients)]
+
         for m_i2, m_i in enumerate(participating_nodes):
-            p_i = cluster_assign[m_i]
-            num_clients = len(participating_nodes)
-            
-            num_cluster_i = counts[cluster_assign[m_i]]
-            num_cluster_rest = num_clients - num_cluster_i
-
-            th_j = min(num_cluster_rest, 100)
-            th_i = min(num_cluster_i, 100)
-            th = min(th_i, th_j)
-
-            # threshold_j = min(num_cluster_rest, int(np.floor(e/2)))
-            # threshold_i = min(num_cluster_i, int(np.floor(e/2))) - 1
-
-            if th <= 1:
-                continue
-
-            selected_clients = random.sample([i for _, i in enumerate(participating_nodes) if i != m_i], int(np.random.randint(min(5, th-1), th, (1,)).item()))
-            # selected_clients =  random.sample([i for _, i in enumerate(participating_nodes) if i != m_i], min(threshold_i,threshold_j))
+            selected_clients = exchange_list[m_i2]
             m_i_cluster = cluster_assign[m_i]
 
             for m_j in selected_clients:
+                exchanges += 2
                 m_j_cluster = cluster_assign[m_j]
-                exchanges += 1
+                m_j2 = list(participating_nodes).index(m_j)
                 
                 self.model_weights[m_i][m_j_cluster] = self.average_model_weights([self.model_weights[m_i][m_j_cluster], self.model_weights[m_j][m_j_cluster]])
+                self.model_weights[m_j][m_i_cluster] = self.average_model_weights([self.model_weights[m_j][m_i_cluster], self.model_weights[m_i][m_i_cluster]])
 
-        print("exchanges", exchanges)
+                # remove m_i from m_j's list of selected clients
+                if m_i in exchange_list[m_j2]:
+                    exchange_list[m_j2].remove(m_i)
+
+                # done to keep the number of exchanges at len(selected_clients[m_j]) for each client
+                elif m_i not in exchange_list[m_j2] and exchange_list[m_j2]:
+                    exchange_list[m_j2].remove(random.choice(exchange_list[m_j2]))
+
+                else:
+                    for partners in exchange_list:
+                        if m_j in partners:
+                            partners.remove(m_j)
+        # print("exchanges", exchanges)
 
         # for p_i in range(p):
         #     if len(local_weights_cluster[p_i]) > 0:
@@ -574,8 +576,16 @@ class TrainCIFARCluster(object):
 
         if VERBOSE: print(f"train_whole {t1-t0:.3f} t_gd {time_train:.3f} t load data {time_load_data:.3f} t put model {t_put_weight:.3f} t get mdoel {t_get_weight:.3f}  averaging {t2-t1:.3f}")
 
-    def get_cluster_accuracy(self, actual, pred):
-        
+    def get_cluster_acc(self, cluster_assign, train, participating_nodes):
+        if train:
+            dataset = self.dataset['train']
+        else:
+            dataset = self.dataset['test']
+
+        actual = [int(dataset['cluster_assign'][m_i]) for m_i in participating_nodes]
+        pred = [int(cluster_assign[m_i]) for m_i in participating_nodes]
+        # print(f"actual {actual}")
+        # print(f"pred {pred}")
         cm = confusion_matrix(actual, pred)
 
         row_ind, col_ind = linear_sum_assignment(-cm)
@@ -683,7 +693,7 @@ class TrainCIFARCluster(object):
         acc = np.sum(min_corrects) / num_data
 
         # check cluster assignment acc
-        # cl_acc = self.get_cluster_accuracy(dataset['cluster_assign'], cluster_assign)
+        cl_acc = self.get_cluster_acc(cluster_assign, train, participating_nodes)
         cl_ct = [np.sum(np.array(cluster_assign) == p_i ) for p_i in range(p)]
 
 
@@ -697,7 +707,7 @@ class TrainCIFARCluster(object):
         # res['cluster_assign'] = cluster_assign
         res['loss'] = loss
         res['acc'] = acc
-        # res['cl_acc'] = cl_acc
+        res['cl_acc'] = cl_acc
         res['cl_ct'] = cl_ct
         res['cl_ct_ans'] = cl_ct_ans
         res['is_train'] = train
