@@ -10,7 +10,8 @@ import random
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import confusion_matrix
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
+tf.disable_v2_behavior()
 
 import numpy as np
 
@@ -534,6 +535,8 @@ class TrainCIFARCluster(object):
         for m_i2, m_i in enumerate(participating_nodes):
             counts[cluster_assign[m_i]] += 1
 
+        exchanges = 0
+
         for m_i2, m_i in enumerate(participating_nodes):
             p_i = cluster_assign[m_i]
             num_clients = len(participating_nodes)
@@ -557,9 +560,11 @@ class TrainCIFARCluster(object):
 
             for m_j in selected_clients:
                 m_j_cluster = cluster_assign[m_j]
+                exchanges += 1
                 
                 self.model_weights[m_i][m_j_cluster] = self.average_model_weights([self.model_weights[m_i][m_j_cluster], self.model_weights[m_j][m_j_cluster]])
 
+        print("exchanges", exchanges)
 
         # for p_i in range(p):
         #     if len(local_weights_cluster[p_i]) > 0:

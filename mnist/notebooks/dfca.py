@@ -588,7 +588,7 @@ class TrainMNISTCluster(object):
 
         # calculate the maximum number of possible exchange partners for m_i (capped at 100)
         min_partners = num_clients-1
-        threshold = min(min_partners, 100)
+        threshold = min(min_partners, 130)
         exchanges = 0
 
         if threshold <= 1:
@@ -613,16 +613,25 @@ class TrainMNISTCluster(object):
                 m_i_model = self.models[m_i][m_i_cluster]
                 m_j_model = self.models[m_j][m_i_cluster]
                 self.weighted_avg_update(m_i_model, m_j_model, alpha)
-                
+
+
+                # remove m_i from m_j's list of selected clients
                 if m_i in selected_clients[m_j]:
                     selected_clients[m_j].remove(m_i)
 
-                if m_i not in selected_clients[m_j] and selected_clients[m_j]:
+                # done to keep the number of exchanges at len(selected_clients[m_j]) for each client
+                elif m_i not in selected_clients[m_j] and selected_clients[m_j]:
                     selected_clients[m_j].remove(random.choice(selected_clients[m_j]))
+
+                else:
+                    for partners in selected_clients:
+                        if m_j in partners:
+                            partners.remove(m_j)
+
         
 
-        # print("exchanges: ", exchanges)
-        # print("exchanges per client: ", exchanges / num_clients)
+        print("exchanges: ", exchanges)
+        print("exchanges per client: ", exchanges / num_clients)
 
 
     # def dec_param_update(self, cluster_assign):
