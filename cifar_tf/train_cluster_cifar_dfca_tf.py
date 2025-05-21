@@ -83,7 +83,8 @@ class TrainCIFARCluster(object):
 
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
-        self.sess = tf.Session(config=config)
+        with tf.device('/gpu:0'):
+            self.sess = tf.Session(config=config)
 
 
         set_random_seed(self.config['data_seed']+self.config['train_seed'])
@@ -180,6 +181,7 @@ class TrainCIFARCluster(object):
 
 
     def setup_model(self):
+        tf.compat.v1.reset_default_graph()
 
         # setup tensorflow model structure
 
@@ -232,7 +234,7 @@ class TrainCIFARCluster(object):
             models.append(weights)
 
         for m_i in range(m):
-            self.model_weights.append(copy.deepcopy(models))
+            self.model_weights.append(models)
 
     def get_model_weights(self):
         self.collection = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
@@ -528,32 +530,35 @@ class TrainCIFARCluster(object):
 
         # averaging
 
+        counts = {i: 0 for i in range(p)}
+        for m_i2, m_i in enumerate(participating_nodes):
+            counts[cluster_assign[m_i]] += 1
 
         for m_i2, m_i in enumerate(participating_nodes):
             p_i = cluster_assign[m_i]
             num_clients = len(participating_nodes)
-
-            counts = {i: 0 for i in range(p)}
-            for value in cluster_assign:
-                counts[value] += 1
             
             num_cluster_i = counts[cluster_assign[m_i]]
             num_cluster_rest = num_clients - num_cluster_i
 
-            threshold_j = min(num_cluster_rest, 100)
-            threshold_i = min(num_cluster_i, 100)
+            th_j = min(num_cluster_rest, 100)
+            th_i = min(num_cluster_i, 100)
+            th = min(th_i, th_j)
 
-            if threshold_i <=1 or threshold_j <= 1:
+            # threshold_j = min(num_cluster_rest, int(np.floor(e/2)))
+            # threshold_i = min(num_cluster_i, int(np.floor(e/2))) - 1
+
+            if th <= 1:
                 continue
 
-            selected_clients = random.sample([i for i in participating_nodes if i != m_i], np.random.randint(1, min(threshold_i,threshold_j), (1,)))
+            selected_clients = random.sample([i for _, i in enumerate(participating_nodes) if i != m_i], int(np.random.randint(min(5, th-1), th, (1,)).item()))
+            # selected_clients =  random.sample([i for _, i in enumerate(participating_nodes) if i != m_i], min(threshold_i,threshold_j))
             m_i_cluster = cluster_assign[m_i]
 
             for m_j in selected_clients:
                 m_j_cluster = cluster_assign[m_j]
                 
                 self.model_weights[m_i][m_j_cluster] = self.average_model_weights([self.model_weights[m_i][m_j_cluster], self.model_weights[m_j][m_j_cluster]])
-                self.model_weights[m_j][m_i_cluster] = self.average_model_weights([self.model_weights[m_i][m_i_cluster], self.model_weights[m_j][m_i_cluster]])
 
 
         # for p_i in range(p):
@@ -673,7 +678,7 @@ class TrainCIFARCluster(object):
         acc = np.sum(min_corrects) / num_data
 
         # check cluster assignment acc
-        cl_acc = self.get_cluster_accuracy(dataset['cluster_assign'], cluster_assign)
+        # cl_acc = self.get_cluster_accuracy(dataset['cluster_assign'], cluster_assign)
         cl_ct = [np.sum(np.array(cluster_assign) == p_i ) for p_i in range(p)]
 
 
@@ -687,7 +692,7 @@ class TrainCIFARCluster(object):
         # res['cluster_assign'] = cluster_assign
         res['loss'] = loss
         res['acc'] = acc
-        res['cl_acc'] = cl_acc
+        # res['cl_acc'] = cl_acc
         res['cl_ct'] = cl_ct
         res['cl_ct_ans'] = cl_ct_ans
         res['is_train'] = train
