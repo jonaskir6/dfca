@@ -362,7 +362,7 @@ class TrainCIFARCluster(object):
                 # print(f'checkpoint written at {self.checkpoint_fname}')
 
         # import ipdb; ipdb.set_trace()
-
+        return results
 
     def find_good_initializer(self):
         print("finding good initializer from train data")

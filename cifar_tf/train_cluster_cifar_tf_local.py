@@ -186,7 +186,7 @@ class TrainCIFARClusterLocal(TrainCIFARCluster):
                     print(f'result written at {self.result_fname+".pickle"}')
                 # self.save_checkpoint()
                 # print(f'checkpoint written at {self.checkpoint_fname}')
-
+        return results
 
     def set_participating_nodes(self):
         cfg = self.config
