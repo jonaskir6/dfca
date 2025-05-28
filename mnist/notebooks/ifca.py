@@ -445,7 +445,7 @@ class TrainMNISTCluster(object):
 
         return cl_acc
 
-
+    @torch.no_grad()
     def get_inference_stats(self, train = True):
         cfg = self.config
         if train:

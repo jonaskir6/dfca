@@ -426,19 +426,22 @@ class TrainMNISTCluster(object):
         return np.array(losses)
     
     def get_cluster_accuracy(self, actual, pred):
-        
+        # actual is the real cluster assignment, pred is the predicted cluster assignment
+        # Computation of the confusion matrix for the hungarian algorithm
         cm = confusion_matrix(actual, pred)
 
+        # Use the Hungarian algorithm to find the optimal assignment
         row_ind, col_ind = linear_sum_assignment(-cm)
         matching = dict(zip(col_ind, row_ind))
 
         remapped_preds = [matching[p] for p in pred]
 
+        # Calculate the accuracy of the remapped predictions
         cl_acc = np.mean(np.array(remapped_preds) == np.array(actual))
 
         return cl_acc
 
-
+    @torch.no_grad()
     def get_inference_stats(self, train = True):
         cfg = self.config
         if train:
@@ -630,8 +633,8 @@ class TrainMNISTCluster(object):
 
         
 
-        print("exchanges: ", exchanges)
-        print("exchanges per client: ", exchanges / num_clients)
+        # print("exchanges: ", exchanges)
+        # print("exchanges per client: ", exchanges / num_clients)
 
 
     # def dec_param_update(self, cluster_assign):
@@ -754,7 +757,8 @@ class TrainMNISTCluster(object):
             data.append(X_batch3)
 
         return data, y_batch
-
+    
+    @torch.no_grad()
     def test_all(self, train=False):
         cfg = self.config
         m = cfg['m_test']
