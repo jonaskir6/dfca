@@ -1,0 +1,8 @@
+__pycache__
+data
+outputs
+output_dfca_gi/*
+output_ifca/*
+output_dfca_li/*
+output/*
+!output/res.py

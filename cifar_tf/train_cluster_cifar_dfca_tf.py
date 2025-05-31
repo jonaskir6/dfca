@@ -84,8 +84,7 @@ class TrainCIFARCluster(object):
 
         config = tf.ConfigProto()
         config.gpu_options.allow_growth = True
-        with tf.device('/gpu:0'):
-            self.sess = tf.Session(config=config)
+        self.sess = tf.Session(config=config)
 
 
         set_random_seed(self.config['data_seed']+self.config['train_seed'])

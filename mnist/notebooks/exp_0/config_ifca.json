@@ -1,10 +1,9 @@
 {
-    "m" : 1200,
-    "m_test" : 200,
+    "m" : 4800,
+    "m_test" : 800,
     "p" : 4,
-    "n" : 200,
+    "n" : 50,
     "uneven": true,
-    "local_model_init": false,
 
     "h1": 200,
 
@@ -17,5 +16,5 @@
     "data_seed":10,
     "train_seed":10,
     "config_override":"",
-    "project_dir": "output_dfca_gi"
+    "project_dir": "output_ifca"
 }
