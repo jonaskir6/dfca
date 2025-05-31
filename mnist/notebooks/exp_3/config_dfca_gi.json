@@ -1,8 +1,8 @@
 {
-    "m" : 1200,
-    "m_test" : 200,
+    "m" : 4800,
+    "m_test" : 800,
     "p" : 4,
-    "n" : 200,
+    "n" : 50,
     "uneven": true,
     "local_model_init": false,
 
