@@ -7,7 +7,7 @@
 
     "h1": 200,
 
-    "num_epochs": 600,
+    "num_epochs": 200,
 
     "batch_size":100,
     "tau":5,

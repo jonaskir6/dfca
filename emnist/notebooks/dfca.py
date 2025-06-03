@@ -431,7 +431,7 @@ class TrainEMNISTCluster(object):
 
         return cl_acc
 
-
+    @torch.no_grad()
     def get_inference_stats(self, train = True):
         cfg = self.config
         if train:
@@ -568,7 +568,6 @@ class TrainEMNISTCluster(object):
 
         # import ipdb; ipdb.set_trace() # we need to check the output of name, check if duplicate exists
 
-
     def dec_param_update(self, cluster_assign):
 
         num_clients = self.config['m']
@@ -657,6 +656,8 @@ class TrainEMNISTCluster(object):
 
         return data, y_batch
 
+
+    @torch.no_grad()
     def test_all(self, train=False):
         cfg = self.config
         m = cfg['m_test']
