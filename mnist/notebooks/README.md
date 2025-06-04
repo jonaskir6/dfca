@@ -1,4 +1,11 @@
 # MNIST EXPERIMENTS
+### To run the experiments yourself, simply run all cells inside the result-notebooks you wish to run
+
+### To reproduce our results, run with random.seed(42)
+
+## cl_acc_exp
+
+- Detailed experiments on clustering accuracy of DFCA-GI with adaptive and fixed R
 
 ## exp_0:
 
