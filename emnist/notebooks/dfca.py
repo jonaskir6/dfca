@@ -568,56 +568,66 @@ class TrainEMNISTCluster(object):
 
         # import ipdb; ipdb.set_trace() # we need to check the output of name, check if duplicate exists
 
+    def weighted_avg_update(self, model_from, model_to, alpha):
+        params_from = dict(model_from.named_parameters())
+        for name, param in model_to.named_parameters():
+            param.data.copy_(alpha * param.data + (1 - alpha) * params_from[name].data)
+
+
     def dec_param_update(self, cluster_assign):
-
         num_clients = self.config['m']
-
-        if num_clients <= 1:
-            return
-
         client_indices = list(range(num_clients)) 
 
+        # calculate the maximum number of possible exchange partners for m_i (capped at 0.1*m)
+        if num_clients > 800 and num_clients <= 3000:
+            max = int(np.floor(num_clients / 10))
+        elif num_clients > 3000:
+            max = 250
+        else:
+            max = int(np.floor(num_clients / 2))
+
+        min_partners = num_clients-1
+
+        threshold = min(min_partners, max)
+        exchanges = 0
+
+        if threshold <= 1:
+            return
+
+        # Make list of randomly selected clients lists for each m_i
+        selected_clients = [random.sample([i for i in client_indices if i != m_i], torch.randint(1, threshold, (1,))) for m_i in range(num_clients)]
+
         for m_i in range(num_clients):
-
-            counts = {i: 0 for i in range(self.config['p'])}
-            for value in cluster_assign:
-                counts[value] += 1
-
-            num_cluster_i = counts[cluster_assign[m_i]]
-            num_cluster_rest = num_clients - num_cluster_i
-
-            threshold_j = min(num_cluster_rest, 100)
-            threshold_i = min(num_cluster_i, 100)
-
-            # threshold_j = min(num_cluster_rest, int(np.floor(e/2)))
-            # threshold_i = min(num_cluster_i, int(np.floor(e/2))) - 1
-
-            if threshold_i <=1 or threshold_j<= 1:
-                continue
-
-            selected_clients = random.sample([i for i in client_indices if i != m_i], torch.randint(1, min(threshold_i,threshold_j), (1,)))
-            # selected_clients += random.sample([i for i in client_indices if i != m_i and cluster_assign[m_i] == cluster_assign[i]], threshold_i)
             m_i_cluster = cluster_assign[m_i]
-            for m_j in selected_clients:
+            # client m_i averages parameters with all selected clients 
+            for m_j in selected_clients[m_i]:
+                exchanges += 2
                 m_j_cluster = cluster_assign[m_j]
+                
+                # average parameters for m_i
+                alpha = 0.5 if m_i_cluster == m_j_cluster else 0.4
+                m_j_model = self.models[m_j][m_j_cluster]
+                m_i_model = self.models[m_i][m_j_cluster]
+                self.weighted_avg_update(m_j_model, m_i_model, alpha)
+                # average parameters for m_j
+                m_i_model = self.models[m_i][m_i_cluster]
+                m_j_model = self.models[m_j][m_i_cluster]
+                self.weighted_avg_update(m_i_model, m_j_model, alpha)
 
-                m_j_params = dict(self.models[m_j][m_j_cluster].named_parameters())
 
-                if m_i_cluster == m_j_cluster:
-                    for name, param in self.models[m_i][m_i_cluster].named_parameters():
-                        m_i_param = param.data.clone()
-                        m_j_param = m_j_params[name].data.clone()
-                        alpha = 0.5
-                        param.data = (m_i_param + m_j_param) / 2     
+                # remove m_i from m_j's list of selected clients
+                if m_i in selected_clients[m_j]:
+                    selected_clients[m_j].remove(m_i)
+
+                # done to keep the number of exchanges at len(selected_clients[m_j]) for each client
+                elif m_i not in selected_clients[m_j] and selected_clients[m_j]:
+                    selected_clients[m_j].remove(random.choice(selected_clients[m_j]))
 
                 else:
-                    for name, param in self.models[m_i][m_j_cluster].named_parameters():
-                        m_i_param = param.data.clone()
-                        m_j_param = m_j_params[name].data.clone()
-                        alpha = 0.5
-                        param.data = alpha * m_i_param + (1 - alpha) * m_j_param
+                    for partners in selected_clients:
+                        if m_j in partners:
+                            partners.remove(m_j)
 
-        # import ipdb; ipdb.set_trace()
 
 
     def test(self, train=False):

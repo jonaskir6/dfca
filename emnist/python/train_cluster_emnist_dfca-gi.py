@@ -1,10 +1,7 @@
 import os
 import time
 import pickle
-import argparse
 import random
-import copy
-import json
 
 import torch
 import torch.nn as nn
@@ -14,57 +11,11 @@ import torchvision.datasets as datasets
 from torch.utils.data import DataLoader
 from scipy.optimize import linear_sum_assignment
 from sklearn.metrics import confusion_matrix
+import copy
 
 import numpy as np
 
 from util import *
-
-
-# LR_DECAY = True
-LR_DECAY = False
-
-def main():
-
-    config = get_config()
-
-    config['train_seed'] = config['data_seed']
-
-    print("config:",config)
-
-    exp = TrainEMNISTCluster(config)
-    exp.setup()
-    exp.run()
-
-
-def get_config():
-
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--project-dir",type=str,default="output")
-    parser.add_argument("--dataset-dir",type=str,default="output")
-    # parser.add_argument("--num-epochs",type=float,default=)
-    parser.add_argument("--lr",type=float,default=0.1)
-    parser.add_argument("--data-seed",type=int,default=0)
-    parser.add_argument("--train-seed",type=int,default=0)
-    parser.add_argument("--config-override",type=str,default="")
-    args = parser.parse_args()
-
-    # read config json and update the sysarg
-    with open("config.json", "r") as read_file:
-        config = json.load(read_file)
-
-    args_dict = vars(args)
-    config.update(args_dict)
-
-    if config["config_override"] == "":
-        del config['config_override']
-    else:
-        print(config['config_override'])
-        config_override = json.loads(config['config_override'])
-        del config['config_override']
-        config.update(config_override)
-
-    return config
-
 
 LR_DECAY = False
 
@@ -173,6 +124,7 @@ class TrainEMNISTCluster(object):
 
             cluster_assign += [p_i for _ in range(m_per_cluster)]
 
+        print(type(data_indices))
         data_indices = np.array(data_indices)
         cluster_assign = np.array(cluster_assign)
         assert data_indices.shape[0] == cluster_assign.shape[0]
@@ -335,11 +287,42 @@ class TrainEMNISTCluster(object):
                 with open(self.result_fname, 'wb') as outfile:
                     pickle.dump(results, outfile)
                     print(f'result written at {self.result_fname}')
-                self.save_checkpoint()
+#                self.save_checkpoint()
                 print(f'checkpoint written at {self.checkpoint_fname}')
 
 
+        # plt.figure(figsize=(10,5))
+        # plt.plot([r['train']['loss'] for r in results], label='train')
+        # plt.xlabel('epoch')
+        # plt.ylabel('loss')
+        # plt.title('Training Loss per Epoch')
+        # plt.legend()
+        # plt.grid(True)
+        # plt.savefig(os.path.join(self.config['project_dir'], 'train_loss.png'))
+        # # import ipdb; ipdb.set_trace()
+
+        # plt.figure(figsize=(10,5))
+        # plt.plot([r['test']['acc'] for r in results], label='test')
+        # plt.xlabel('epoch')
+        # plt.ylabel('test accuracy')
+        # plt.title('Test Accuracy per Epoch')
+        # plt.legend()
+        # plt.grid(True)
+        # plt.savefig(os.path.join(self.config['project_dir'], 'test_acc.png'))
+
+        # plt.figure(figsize=(10,5))
+        # plt.plot([r['train']['cl_acc'] for r in results], label='train')
+        # plt.xlabel('epoch')
+        # plt.ylabel('cluster acc')
+        # plt.title('Cluster Accuracy per Epoch')
+        # plt.legend()
+        # plt.grid(True)
+        # plt.savefig(os.path.join(self.config['project_dir'], 'cluster_acc.png'))
+
         return results
+
+
+
 
 
     def lr_schedule(self, epoch):
@@ -448,7 +431,7 @@ class TrainEMNISTCluster(object):
 
         return cl_acc
 
-
+    @torch.no_grad()
     def get_inference_stats(self, train = True):
         cfg = self.config
         if train:
@@ -585,54 +568,66 @@ class TrainEMNISTCluster(object):
 
         # import ipdb; ipdb.set_trace() # we need to check the output of name, check if duplicate exists
 
+    def weighted_avg_update(self, model_from, model_to, alpha):
+        params_from = dict(model_from.named_parameters())
+        for name, param in model_to.named_parameters():
+            param.data.copy_(alpha * param.data + (1 - alpha) * params_from[name].data)
+
 
     def dec_param_update(self, cluster_assign):
-
         num_clients = self.config['m']
-
         client_indices = list(range(num_clients)) 
 
+        # calculate the maximum number of possible exchange partners for m_i (capped at 0.1*m)
+        if num_clients > 800 and num_clients <= 3000:
+            max = int(np.floor(num_clients / 10))
+        elif num_clients > 3000:
+            max = 250
+        else:
+            max = int(np.floor(num_clients / 2))
+
+        min_partners = num_clients-1
+
+        threshold = min(min_partners, max)
+        exchanges = 0
+
+        if threshold <= 1:
+            return
+
+        # Make list of randomly selected clients lists for each m_i
+        selected_clients = [random.sample([i for i in client_indices if i != m_i], torch.randint(1, threshold, (1,))) for m_i in range(num_clients)]
+
         for m_i in range(num_clients):
-
-            counts = {i: 0 for i in range(self.config['p'])}
-            for value in cluster_assign:
-                counts[value] += 1
-
-            num_cluster_i = counts[cluster_assign[m_i]]
-            num_cluster_rest = num_clients - num_cluster_i
-
-            threshold_j = min(num_cluster_rest, 100)
-            threshold_i = min(num_cluster_i, 100)
-
-            # threshold_j = min(num_cluster_rest, int(np.floor(e/2)))
-            # threshold_i = min(num_cluster_i, int(np.floor(e/2))) - 1
-
-            if threshold_i <=1 or threshold_j<= 1:
-                continue
-
-            selected_clients = random.sample([i for i in client_indices if i != m_i], torch.randint(1, min(threshold_i,threshold_j), (1,)))
-            # selected_clients += random.sample([i for i in client_indices if i != m_i and cluster_assign[m_i] == cluster_assign[i]], threshold_i)
             m_i_cluster = cluster_assign[m_i]
-            for m_j in selected_clients:
+            # client m_i averages parameters with all selected clients 
+            for m_j in selected_clients[m_i]:
+                exchanges += 2
                 m_j_cluster = cluster_assign[m_j]
+                
+                # average parameters for m_i
+                alpha = 0.5 if m_i_cluster == m_j_cluster else 0.4
+                m_j_model = self.models[m_j][m_j_cluster]
+                m_i_model = self.models[m_i][m_j_cluster]
+                self.weighted_avg_update(m_j_model, m_i_model, alpha)
+                # average parameters for m_j
+                m_i_model = self.models[m_i][m_i_cluster]
+                m_j_model = self.models[m_j][m_i_cluster]
+                self.weighted_avg_update(m_i_model, m_j_model, alpha)
 
-                m_j_params = dict(self.models[m_j][m_j_cluster].named_parameters())
 
-                if m_i_cluster == m_j_cluster:
-                    for name, param in self.models[m_i][m_i_cluster].named_parameters():
-                        m_i_param = param.data.clone()
-                        m_j_param = m_j_params[name].data.clone()
-                        alpha = 0.5
-                        param.data = (m_i_param + m_j_param) / 2     
+                # remove m_i from m_j's list of selected clients
+                if m_i in selected_clients[m_j]:
+                    selected_clients[m_j].remove(m_i)
+
+                # done to keep the number of exchanges at len(selected_clients[m_j]) for each client
+                elif m_i not in selected_clients[m_j] and selected_clients[m_j]:
+                    selected_clients[m_j].remove(random.choice(selected_clients[m_j]))
 
                 else:
-                    for name, param in self.models[m_i][m_j_cluster].named_parameters():
-                        m_i_param = param.data.clone()
-                        m_j_param = m_j_params[name].data.clone()
-                        alpha = 0.5
-                        param.data = alpha * m_i_param + (1 - alpha) * m_j_param
+                    for partners in selected_clients:
+                        if m_j in partners:
+                            partners.remove(m_j)
 
-        # import ipdb; ipdb.set_trace()
 
 
     def test(self, train=False):
@@ -671,6 +666,8 @@ class TrainEMNISTCluster(object):
 
         return data, y_batch
 
+
+    @torch.no_grad()
     def test_all(self, train=False):
         cfg = self.config
         m = cfg['m_test']
@@ -719,7 +716,6 @@ class TrainEMNISTCluster(object):
         models_to_save = [model.state_dict() for model in self.models]
         torch.save({'models':models_to_save}, self.checkpoint_fname)
 
-
 class SimpleCNN(nn.Module):
     def __init__(self, h1=128):
         super(SimpleCNN, self).__init__()
@@ -736,10 +732,3 @@ class SimpleCNN(nn.Module):
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return F.log_softmax(x, dim=1)
-    
-
-if __name__ == '__main__':
-    start_time = time.time()
-    main()
-    duration = (time.time() - start_time)
-    print("---train cluster Ended in %0.2f hour (%.3f sec) " % (duration/float(3600), duration))
