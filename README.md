@@ -6,6 +6,5 @@
 
 ## Folders:
 
-### Each folder contains a "python" and "notebooks" folder. To run our experiments it is suggested to run the notebooks. To run the python experiments run ´´´python run.py´´´
-
-- cifar_tf: cifar10 experiments
+- Each folder contains a "python" and "notebooks" folder. To run our experiments it is suggested to run the notebooks.
+- To run the python experiments run ```python run.py```
