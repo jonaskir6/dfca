@@ -208,6 +208,7 @@ class TrainMNISTCluster(object):
         p = self.config['p']
         m = self.config['m']
         local_model_init = self.config['local_model_init']
+        self.R = self.config['R']  # number of rounds
 
         if local_model_init:
             self.models = [[SimpleLinear(h1 = self.config['h1']).to(self.device) for p_i in range(p)] for m_i in range(m)]
@@ -586,13 +587,13 @@ class TrainMNISTCluster(object):
 
 
     def dec_param_update(self, cluster_assign):
+        r = self.R
         num_clients = self.config['m']
         client_indices = list(range(num_clients)) 
 
-        # calculate the maximum number of possible exchange partners for m_i (capped at 130)
         min_partners = num_clients-1
         
-        threshold = min(min_partners, 130)
+        threshold = min(min_partners, r)
         exchanges = 0
 
         if threshold <= 1:

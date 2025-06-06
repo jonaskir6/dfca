@@ -589,13 +589,11 @@ class TrainMNISTCluster(object):
         num_clients = self.config['m']
         client_indices = list(range(num_clients)) 
 
-        # calculate the maximum number of possible exchange partners for m_i (capped at 0.1*m)
-        if num_clients > 800 and num_clients <= 3000:
-            max = int(np.floor(num_clients / 10))
-        elif num_clients > 3000:
-            max = 250
+        # calculate the maximum number of possible exchange partners for m_i (capped at 30)
+        if num_clients > 800:
+            max = 50
         else:
-            max = int(np.floor(num_clients / 2))
+            max = 15
 
         min_partners = num_clients-1
         

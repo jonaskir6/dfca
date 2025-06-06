@@ -5,10 +5,11 @@
     "n" : 200,
     "uneven": true,
     "local_model_init": false,
+    "R": 10,
 
     "h1": 200,
 
-    "num_epochs": 20,
+    "num_epochs": 30,
 
     "batch_size":100,
     "tau":10,

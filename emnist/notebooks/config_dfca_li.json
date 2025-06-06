@@ -3,12 +3,12 @@
     "m_test" : 40,
     "p" : 2,
     "n" : 500,
-    "uneven": true,
+    "uneven": false,
     "local_model_init": true,
 
     "h1": 200,
 
-    "num_epochs": 200,
+    "num_epochs": 300,
 
     "batch_size":100,
     "tau":5,
