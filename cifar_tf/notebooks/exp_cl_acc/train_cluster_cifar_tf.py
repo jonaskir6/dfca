@@ -545,8 +545,8 @@ class TrainCIFARCluster(object):
 
         actual = [int(dataset['cluster_assign'][m_i]) for m_i in participating_nodes]
         pred = [int(cluster_assign[m_i]) for m_i in participating_nodes]
-        print(f"actual {actual}")
-        print(f"pred {pred}")
+        # print(f"actual {actual}")
+        # print(f"pred {pred}")
         cm = confusion_matrix(actual, pred)
 
         row_ind, col_ind = linear_sum_assignment(-cm)
