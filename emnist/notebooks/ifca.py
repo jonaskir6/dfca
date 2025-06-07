@@ -74,7 +74,7 @@ class TrainEMNISTCluster(object):
         # generate indices for each dataset
         # also write cluster info
 
-        EMNIST_TRAINSET_DATA_SIZE = 60000
+        EMNIST_TRAINSET_DATA_SIZE = 50000
         EMNIST_TESTSET_DATA_SIZE = 10000
 
         np.random.seed(self.config['data_seed'])
