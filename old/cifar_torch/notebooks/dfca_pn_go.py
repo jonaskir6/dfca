@@ -2,6 +2,7 @@ import os
 import time
 import pickle
 import random
+import copy
 
 import torch
 import torch.nn as nn
@@ -218,7 +219,7 @@ class TrainCIFARCluster(object):
 
         else:
             global_models = [SimpleCNN().to(self.device) for p_i in range(p)]  # Create p models
-            self.models = [global_models for m_i in range(m)]  # Each client gets the same list of p models
+            self.models = [[copy.deepcopy(model) for model in global_models] for m_i in range(m)]  # Each client gets the same list of p models
 
         self.criterion = torch.nn.CrossEntropyLoss()
         self.cluster_assign = []
@@ -416,7 +417,7 @@ class TrainCIFARCluster(object):
         else:
             lr_str = ""
 
-        str0 = f"Epoch {self.epoch} {data_str}: l {res['loss']:.3f} a {res['acc']:.3f} clct{res['cl_ct']} clct_ans{res['cl_ct_ans']} {lr_str} {time_str}"
+        str0 = f"Epoch {self.epoch} {data_str}: l {res['loss']:.3f} a {res['acc']:.3f} clct{res['cl_ct']} clct_ans{res['cl_ct_ans']} cl_acc{res['cl_acc']:.3f} {lr_str} {time_str}"
 
         print(str0)
 
@@ -457,6 +458,7 @@ class TrainCIFARCluster(object):
                     optim.zero_grad()
                     loss.backward()
                     # self.local_param_update(model, lr)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
                     optim.step()
 
             optim.zero_grad()
@@ -492,7 +494,28 @@ class TrainCIFARCluster(object):
 
         return np.array(losses)
 
+    def get_cluster_acc(self, cluster_assign, train, participating_nodes):
+        if train:
+            dataset = self.dataset['train']
+        else:
+            dataset = self.dataset['test']
 
+        actual = [int(dataset['cluster_assign'][m_i]) for m_i in participating_nodes]
+        pred = [int(cluster_assign[m_i]) for m_i in participating_nodes]
+        # print(f"actual {actual}")
+        # print(f"pred {pred}")
+        cm = confusion_matrix(actual, pred)
+
+        row_ind, col_ind = linear_sum_assignment(-cm)
+        matching = dict(zip(col_ind, row_ind))
+
+        remapped_preds = [matching[p] for p in pred]
+
+        cl_acc = np.mean(np.array(remapped_preds) == np.array(actual))
+
+        return cl_acc
+
+    @torch.no_grad()
     def get_inference_stats(self, train = True):
         cfg = self.config
         if train:
@@ -562,7 +585,7 @@ class TrainCIFARCluster(object):
         # cl_acc = self.get_cluster_accuracy(dataset['cluster_assign'], cluster_assign)
         cl_ct = [np.sum(np.array(cluster_assign) == p_i ) for p_i in range(p)]
 
-        # cl_acc = self.get_cluster_accuracy(cluster_assign, train)
+        cl_acc = self.get_cluster_acc(cluster_assign, train, participating_nodes)
 
         # improved cluster assignment acc (model 2 can work better on clients with p=3)
         cluster_assign_ans = dataset['cluster_assign']
@@ -577,7 +600,7 @@ class TrainCIFARCluster(object):
         res['num_data'] = num_data
         res['loss'] = loss
         res['acc'] = acc
-        # res['cl_acc'] = cl_acc
+        res['cl_acc'] = cl_acc
         res['cl_ct'] = cl_ct
         res['is_train'] = train
         res['cl_ct_ans'] = cl_ct_ans
@@ -648,6 +671,12 @@ class TrainCIFARCluster(object):
         # import ipdb; ipdb.set_trace() # we need to check the output of name, check if duplicate exists
 
 
+    def weighted_avg_update(self, model_from, model_to, alpha):
+        params_from = dict(model_from.named_parameters())
+        for name, param in model_to.named_parameters():
+            param.data.copy_(alpha * param.data + (1 - alpha) * params_from[name].data)
+
+
     def dec_param_update(self):     
         cluster_assign = self.cluster_assign
         p = self.config['p']
@@ -657,51 +686,99 @@ class TrainCIFARCluster(object):
         if num_clients <= 1:
             return
 
-        client_indices = list(range(num_clients)) 
+        # client_indices = list(range(num_clients)) 
 
-        counts = {i: 0 for i in range(p)}
+        # counts = {i: 0 for i in range(p)}
+        # for m_i2, m_i in enumerate(participating_nodes):
+        #     counts[cluster_assign[m_i]] += 1
+
+        # for m_i2, m_i in enumerate(participating_nodes):
+        #     num_cluster_i = counts[cluster_assign[m_i]]
+        #     num_cluster_rest = num_clients - num_cluster_i
+
+        #     th_j = min(num_cluster_rest, 100)
+        #     th_i = min(num_cluster_i, 100)
+        #     th = min(th_i, th_j)
+
+        #     # threshold_j = min(num_cluster_rest, int(np.floor(e/2)))
+        #     # threshold_i = min(num_cluster_i, int(np.floor(e/2))) - 1
+
+        #     if th <= 1:
+        #         continue
+
+        #     selected_clients = random.sample([i for i in client_indices if i != m_i], torch.randint(min(5, th), th, (1,)))
+        #     # selected_clients = random.sample([i for i in client_indices if i != m_i], min(threshold_i,threshold_j))
+        #     # selected_clients += random.sample([i for i in client_indices if i != m_i and cluster_assign[m_i] == cluster_assign[i]], threshold_i)
+        #     m_i_cluster = cluster_assign[m_i]
+        #     for m_j in selected_clients:
+        #         m_j_cluster = cluster_assign[m_j]
+
+        #         m_j_params = dict(self.models[m_j][m_j_cluster].named_parameters())
+
+        #         if m_i_cluster == m_j_cluster:
+        #             for name, param in self.models[m_i][m_i_cluster].named_parameters():
+        #                 m_i_param = param.data.clone()
+        #                 m_j_param = m_j_params[name].data.clone()
+        #                 alpha = 0.5
+        #                 param.data = (m_i_param + m_j_param) / 2     
+
+        #         else:
+        #             for name, param in self.models[m_i][m_j_cluster].named_parameters():
+        #                 m_i_param = param.data.clone()
+        #                 m_j_param = m_j_params[name].data.clone()
+        #                 alpha = 0.5
+        #                 param.data = alpha * m_i_param + (1 - alpha) * m_j_param
+
+        # # import ipdb; ipdb.set_trace()
+    
+        # calculate the maximum number of possible exchange partners for m_i (capped at 0.1*m)
+        if num_clients > 800:
+            max = 30
+        else:
+            max = 15
+
+        min_partners = num_clients-1
+
+        threshold = min(min_partners, max)
+        exchanges = 0
+
+        if threshold <= 1:
+            return
+
+        # Make list of randomly selected clients lists for each m_i
+        selected_clients = [random.sample([i for i2, i in enumerate(participating_nodes) if i != m_i], torch.randint(1, threshold, (1,))) for m_i2, m_i in enumerate(participating_nodes)]
+
         for m_i2, m_i in enumerate(participating_nodes):
-            counts[cluster_assign[m_i]] += 1
-
-        for m_i2, m_i in enumerate(participating_nodes):
-            num_cluster_i = counts[cluster_assign[m_i]]
-            num_cluster_rest = num_clients - num_cluster_i
-
-            th_j = min(num_cluster_rest, 100)
-            th_i = min(num_cluster_i, 100)
-            th = min(th_i, th_j)
-
-            # threshold_j = min(num_cluster_rest, int(np.floor(e/2)))
-            # threshold_i = min(num_cluster_i, int(np.floor(e/2))) - 1
-
-            if th <= 1:
-                continue
-
-            selected_clients = random.sample([i for i in client_indices if i != m_i], torch.randint(min(5, th), th, (1,)))
-            # selected_clients = random.sample([i for i in client_indices if i != m_i], min(threshold_i,threshold_j))
-            # selected_clients += random.sample([i for i in client_indices if i != m_i and cluster_assign[m_i] == cluster_assign[i]], threshold_i)
             m_i_cluster = cluster_assign[m_i]
-            for m_j in selected_clients:
+            # client m_i averages parameters with all selected clients 
+            for m_j in selected_clients[m_i2]:
+                exchanges += 2
                 m_j_cluster = cluster_assign[m_j]
+                
+                # average parameters for m_i
+                alpha = 0.5 if m_i_cluster == m_j_cluster else 0.4
+                m_j_model = self.models[m_j][m_j_cluster]
+                m_i_model = self.models[m_i][m_j_cluster]
+                self.weighted_avg_update(m_j_model, m_i_model, alpha)
+                # average parameters for m_j
+                m_i_model = self.models[m_i][m_i_cluster]
+                m_j_model = self.models[m_j][m_i_cluster]
+                self.weighted_avg_update(m_i_model, m_j_model, alpha)
 
-                m_j_params = dict(self.models[m_j][m_j_cluster].named_parameters())
+                m_j2 = list(participating_nodes).index(m_j)  # get index of m_j in participating_nodes
+                # remove m_i from m_j's list of selected clients
+                if m_i in selected_clients[m_j2]:
+                    selected_clients[m_j2].remove(m_i)
 
-                if m_i_cluster == m_j_cluster:
-                    for name, param in self.models[m_i][m_i_cluster].named_parameters():
-                        m_i_param = param.data.clone()
-                        m_j_param = m_j_params[name].data.clone()
-                        alpha = 0.5
-                        param.data = (m_i_param + m_j_param) / 2     
+                # done to keep the number of exchanges at len(selected_clients[m_j]) for each client
+                elif m_i not in selected_clients[m_j2] and selected_clients[m_j2]:
+                    selected_clients[m_j2].remove(random.choice(selected_clients[m_j2]))
 
                 else:
-                    for name, param in self.models[m_i][m_j_cluster].named_parameters():
-                        m_i_param = param.data.clone()
-                        m_j_param = m_j_params[name].data.clone()
-                        alpha = 0.5
-                        param.data = alpha * m_i_param + (1 - alpha) * m_j_param
-
-        # import ipdb; ipdb.set_trace()
-
+                    for partners in selected_clients:
+                        if m_j in partners:
+                            partners.remove(m_j)
+                        
 
     def test(self, train=False):
         return self.get_inference_stats(train=train)
@@ -749,6 +826,7 @@ class TrainCIFARCluster(object):
 
         return data, y_batch
 
+    @torch.no_grad()
     def test_all(self, train=False):
         cfg = self.config
         m = cfg['m_test']

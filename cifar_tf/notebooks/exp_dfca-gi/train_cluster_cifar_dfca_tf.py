@@ -535,11 +535,9 @@ class TrainCIFARCluster(object):
         num_clients = len(participating_nodes)
         min_partners = num_clients-1
         if num_clients > 1000:
-            th = min(min_partners, num_clients/10)
-        elif num_clients >= 60:
-            th = min(min_partners, num_clients/2)
+            th = 30
         else:
-            th = min_partners
+            th = 12
         
         exchanges = 0
 
