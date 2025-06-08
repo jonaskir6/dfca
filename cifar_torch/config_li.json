@@ -3,19 +3,20 @@
     "m_test" : 40,
     "p" : 2,
     "n" : 500,
-    "uneven": true,
+    "uneven": false,
     "local_model_init": true,
+    "participation_rate": 0.3,
 
-    "h1": 200,
+    "h1": 128,
 
-    "num_epochs": 300,
+    "num_epochs": 600,
 
-    "batch_size":100,
+    "batch_size":50,
     "tau":5,
     "lr":0.25,
 
     "data_seed":10,
     "train_seed":10,
     "config_override":"",
-    "project_dir": "output_dfca_li"
+    "project_dir": "output_dfca_gi"
 }
