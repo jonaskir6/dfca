@@ -5,11 +5,11 @@
     "n" : 500,
     "uneven": false,
     "local_model_init": false,
-    "participation_rate": 0.8,
+    "participation_rate": 0.3,
 
     "h1": 128,
 
-    "num_epochs": 600,
+    "num_epochs": 30,
 
     "batch_size":50,
     "tau":5,

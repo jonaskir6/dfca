@@ -456,6 +456,7 @@ class TrainCIFARCluster(object):
                     optim.zero_grad()
                     loss.backward()
                     # self.local_param_update(model, lr)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
                     optim.step()
 
             optim.zero_grad()
@@ -502,7 +503,7 @@ class TrainCIFARCluster(object):
 
         return np.array(losses)
 
-
+    @torch.no_grad()
     def get_inference_stats(self, train = True):
         cfg = self.config
         if train:

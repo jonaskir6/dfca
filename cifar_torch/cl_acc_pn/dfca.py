@@ -309,7 +309,7 @@ class TrainCIFARCluster(object):
             results.append(result)
 
             if LR_DECAY:
-                self.lr = self.lr * 0.9995
+                self.lr = self.lr * 0.9999
 
             # this will be used in next epoch's gradient update
 
@@ -456,7 +456,7 @@ class TrainCIFARCluster(object):
             p_i = cluster_assign[m_i]
             model = self.models[m_i][p_i]
 
-            optim = torch.optim.SGD(model.parameters(), lr=lr)
+            optim = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=0.004)
 
             for step_i in range(tau):
                 for x, y in dl:
@@ -582,12 +582,11 @@ class TrainCIFARCluster(object):
 
         if train:
             self.cluster_assign = cluster_assign
+            loss = np.mean(min_losses)
+            acc = np.sum(min_corrects) / num_data
 
-        loss = np.mean(min_losses)
-        acc = np.sum(min_corrects) / num_data
-
-        # else:
-        #     loss, acc = self.test_all()
+        else:
+            loss, acc = self.test_all()
 
 
         # check cluster assignment acc
@@ -744,7 +743,7 @@ class TrainCIFARCluster(object):
         if num_clients > 800:
             max = 30
         else:
-            max = 25
+            max = 10
 
         min_partners = num_clients-1
 
@@ -765,7 +764,7 @@ class TrainCIFARCluster(object):
                 m_j_cluster = cluster_assign[m_j]
                 
                 # average parameters for m_i
-                alpha = 0.5 if m_i_cluster == m_j_cluster else 0.5
+                alpha = 0.5 if m_i_cluster == m_j_cluster else 0.4
                 m_j_model = self.models[m_j][m_j_cluster]
                 m_i_model = self.models[m_i][m_j_cluster]
                 self.weighted_avg_update(m_j_model, m_i_model, alpha)
