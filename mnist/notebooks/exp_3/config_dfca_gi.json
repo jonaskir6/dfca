@@ -4,7 +4,7 @@
     "p" : 4,
     "n" : 50,
     "uneven": false,
-    "local_model_init": true,
+    "local_model_init": false,
 
     "h1": 200,
 
