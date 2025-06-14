@@ -744,7 +744,7 @@ class TrainCIFARCluster(object):
         if num_clients > 800:
             max = 30
         else:
-            max = 25
+            max = 20
 
         min_partners = num_clients-1
 
