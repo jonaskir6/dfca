@@ -8,11 +8,11 @@
 
     "h1": 200,
 
-    "num_epochs": 200,
+    "num_epochs": 300,
 
     "batch_size":100,
     "tau":5,
-    "lr":0.05,
+    "lr":0.25,
 
     "data_seed":10,
     "train_seed":10,

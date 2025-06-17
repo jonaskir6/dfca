@@ -2,7 +2,7 @@
 
 - a synchronous simulation of the decentralzied federated clustering algorithm with mnist, emnist and cifar10
 - codebase: https://github.com/jichan3751/ifca
-- Code for my Bachelor Thesis written at TU-Dortmund, Fraunhofer-ISST
+- Code for my Bachelor Thesis written at TU-Dortmund (Department of Artificial Intelligence, Prof. Harmeling) and Fraunhofer-ISST (Department of Mobility and Smart Cities, M.Sc. Sebasian Becker)
 
 ## Folders:
 

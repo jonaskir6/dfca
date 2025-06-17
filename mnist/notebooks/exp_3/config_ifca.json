@@ -3,7 +3,7 @@
     "m_test" : 800,
     "p" : 4,
     "n" : 50,
-    "uneven": true,
+    "uneven": false,
 
     "h1": 200,
 
