@@ -444,7 +444,8 @@ class TrainCIFARCluster(object):
 
         str0 = f"Epoch {self.epoch} {data_str}: l {res['loss']:.3f} a {res['acc']:.3f} {cl_str}{lr_str} cl_acc {res['cl_acc']:3f} {time_str}"
 
-        print(str0)
+        if self.epoch % 10 == 0:
+            print(str0)
 
 
     def train(self, lr):
