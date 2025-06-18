@@ -7,4 +7,4 @@
 ## Folders:
 
 - Each folder contains a "python" and "notebooks" folder. To run our experiments it is suggested to run the notebooks.
-- To run the python experiments run ```python run.py```
+- To run the python experiments run ```python run.py``` (not guaranteed to work, e.g. tensorflow v1 used)
