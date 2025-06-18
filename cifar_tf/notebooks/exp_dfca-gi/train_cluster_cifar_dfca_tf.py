@@ -538,7 +538,7 @@ class TrainCIFARCluster(object):
         if num_clients > 1000:
             th = 30
         else:
-            th = 50
+            th = 20
         
         exchanges = 0
 

@@ -226,16 +226,15 @@ class TrainCIFARCluster(object):
 
         self.init_op = tf.global_variables_initializer()
 
-        models = []
-        for p_i in range(p):
-            self.sess.run(self.init_op)
-            weights = self.get_model_weights()
-            models.append(weights)
-
         self.model_weights = []
         for m_i in range(m):
-            client_models = [copy.deepcopy(w) for w in models]
-            self.model_weights.append(client_models)
+            models = []
+            for p_i in range(p):
+                self.sess.run(self.init_op)
+                weights = self.get_model_weights()
+                models.append(weights)
+            self.model_weights.append(models)
+
 
     def get_model_weights(self):
         self.collection = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
@@ -452,9 +451,8 @@ class TrainCIFARCluster(object):
             cl_str = ""
 
         str0 = f"Epoch {self.epoch} {data_str}: l {res['loss']:.3f} a {res['acc']:.3f} {cl_str}{lr_str} cl_acc {res['cl_acc']:.3f} {time_str}"
-        
-        if self.epoch % 10 == 0:
-            print(str0)
+
+        print(str0)
 
     def train(self, lr):
 
@@ -538,14 +536,14 @@ class TrainCIFARCluster(object):
         if num_clients > 1000:
             th = 30
         else:
-            th = 20
+            th = 30
         
         exchanges = 0
 
         if th <= 1:
             return
 
-        exchange_list = [random.sample([i for i2, i in enumerate(participating_nodes) if i != m_i], int(np.random.randint(min(1, th-1), th, (1,)).item())) for m_i2, m_i in enumerate(participating_nodes)]
+        exchange_list = [random.sample([i for i in participating_nodes if i != m_i], int(np.random.randint(min(1, th-1), th, (1,)).item())) for m_i in range(num_clients)]
 
         for m_i2, m_i in enumerate(participating_nodes):
             selected_clients = exchange_list[m_i2]

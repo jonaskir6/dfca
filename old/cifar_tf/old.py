@@ -452,9 +452,8 @@ class TrainCIFARCluster(object):
             cl_str = ""
 
         str0 = f"Epoch {self.epoch} {data_str}: l {res['loss']:.3f} a {res['acc']:.3f} {cl_str}{lr_str} cl_acc {res['cl_acc']:.3f} {time_str}"
-        
-        if self.epoch % 10 == 0:
-            print(str0)
+
+        print(str0)
 
     def train(self, lr):
 
@@ -545,7 +544,7 @@ class TrainCIFARCluster(object):
         if th <= 1:
             return
 
-        exchange_list = [random.sample([i for i2, i in enumerate(participating_nodes) if i != m_i], int(np.random.randint(min(1, th-1), th, (1,)).item())) for m_i2, m_i in enumerate(participating_nodes)]
+        exchange_list = [random.sample([i for i in participating_nodes if i != m_i], int(np.random.randint(min(1, th-1), th, (1,)).item())) for m_i in range(num_clients)]
 
         for m_i2, m_i in enumerate(participating_nodes):
             selected_clients = exchange_list[m_i2]
