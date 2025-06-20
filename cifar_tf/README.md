@@ -1,7 +1,5 @@
-# MNIST EXPERIMENTS
+# CIFAR10 EXPERIMENTS
 ### To run the experiments yourself, simply run all cells inside the result-notebooks you wish to run
-
-### To reproduce our results, run with random.seed(42)
 
 ## exp_cl_acc
 
