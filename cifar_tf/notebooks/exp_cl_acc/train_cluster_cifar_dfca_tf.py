@@ -452,7 +452,7 @@ class TrainCIFARCluster(object):
             cl_str = ""
 
         str0 = f"Epoch {self.epoch} {data_str}: l {res['loss']:.3f} a {res['acc']:.3f} {cl_str}{lr_str} cl_acc {res['cl_acc']:.3f} {time_str}"
-
+        
         print(str0)
 
     def train(self, lr):
@@ -534,19 +534,23 @@ class TrainCIFARCluster(object):
         # calculate the maximum number of possible exchange partners for m_i (capped at 100)
         num_clients = len(participating_nodes)
         min_partners = num_clients-1
-        if num_clients > 1000:
-            th = min(min_partners, num_clients/10)
+        if num_clients >= 100:
+            th = 50
+        elif num_clients >= 80:
+            th = 40
         elif num_clients >= 60:
-            th = min(min_partners, num_clients/2)
+            th = 30
+        elif num_clients >= 40:
+            th = 18
         else:
-            th = min_partners
+            th = 12
         
         exchanges = 0
 
         if th <= 1:
             return
 
-        exchange_list = [random.sample([i for i in participating_nodes if i != m_i], int(np.random.randint(min(1, th-1), th, (1,)).item())) for m_i in range(num_clients)]
+        exchange_list = [random.sample([i for i2, i in enumerate(participating_nodes) if i != m_i], int(np.random.randint(min(1, th-1), th, (1,)).item())) for m_i2, m_i in enumerate(participating_nodes)]
 
         for m_i2, m_i in enumerate(participating_nodes):
             selected_clients = exchange_list[m_i2]
