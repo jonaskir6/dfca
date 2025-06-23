@@ -179,6 +179,7 @@ class TrainCIFARCluster(object):
 
 
     def setup_model(self):
+        tf.compat.v1.reset_default_graph()
 
         # setup tensorflow model structure
 

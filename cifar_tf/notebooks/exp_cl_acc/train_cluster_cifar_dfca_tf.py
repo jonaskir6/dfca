@@ -534,17 +534,7 @@ class TrainCIFARCluster(object):
         # calculate the maximum number of possible exchange partners for m_i (capped at 100)
         num_clients = len(participating_nodes)
         min_partners = num_clients-1
-        th=15
-        # if num_clients >= 100:
-        #     th = 100
-        # elif num_clients >= 80:
-        #     th = 40
-        # elif num_clients >= 60:
-        #     th = 30
-        # elif num_clients >= 40:
-        #     th = 18
-        # else:
-        #     th = 12
+        th = 30
         
         exchanges = 0
 
