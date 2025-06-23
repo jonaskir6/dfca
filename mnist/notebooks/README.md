@@ -12,16 +12,16 @@
 
 - Experiments on uneven datasets using DFCA-GI, DFCA-LI and IFCA with lr=0.1, m=1200, n=200, lambda=25
 - Graphs can be found in 'graphs' folder or in the notebook
-- Results can be found in 'result.ipynb'
+- Results can be found in 'result.ipynb' and 'results_uneven.ipynb'
 
 ## exp_2:
 
 - Experiments on uneven datasets using DFCA-GI, DFCA-LI and IFCA with lr=0.1, m=2400, n=100, lambda=25
 - Graphs can be found in 'graphs' folder or in the notebook
-- Results can be found in 'result.ipynb'
+- Results can be found in 'result.ipynb' and 'results_uneven.ipynb'
 
 ## exp_3:
 
 - Experiments on uneven datasets using DFCA-GI, DFCA-LI and IFCA with lr=0.1, m=4800, n= 50, lambda=50
 - Graphs can be found in 'graphs' folder or in the notebook
-- Results can be found in 'result.ipynb'
+- Results can be found in 'result.ipynb' and 'results_uneven.ipynb'
