@@ -1,4 +1,4 @@
-# Decentralized Federated Clustering Algorithm (DFCA)
+# Bachelor Thesis
 
 - a synchronous simulation of the decentralzied federated clustering algorithm with mnist, emnist and cifar10
 - codebase: https://github.com/jichan3751/ifca
